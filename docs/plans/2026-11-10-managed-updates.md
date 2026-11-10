@@ -19,7 +19,7 @@ Activation queues a verified candidate. The supervisor requests a drain, never f
 - `src/runtime.ts`: parent-only IPC drain at cycle boundary and readiness, preserve mutation/journal semantics.
 - `src/cli.ts`: managed run/service/update/status/opt-out integration and installed-version reporting.
 - `tests/updater.test.ts`: real state/install/handoff processes with synthetic packages, failure/concurrency/opt-out boundaries.
-- `.github/workflows/{ci,release}.yml`, `scripts/release.mjs`: frozen Node24.13.0, exact identity/tag validation, deterministic tarball, separate least-privilege release and OIDC publication.
+- `.github/workflows/{ci,release}.yml`, `scripts/release.mjs`: frozen Node24.13.0, exact identity/tag validation, deterministic tarball and a least-privilege publishing step using the already-provisioned organization secret.
 
 ## Verification entrypoints (integration owner only)
 

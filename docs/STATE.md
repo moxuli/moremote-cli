@@ -31,8 +31,8 @@ remain separate gates.
 ## Managed updates and release — local acceptance complete
 
 The owner authorized public scoped npm identity `@moxuli/moremote`, retained
-private bootstrap/supervisor, cycle-safe automatic runtime activation and OIDC
-release workflows. Native service/state/executable identities remain unchanged.
+private bootstrap/supervisor and cycle-safe automatic runtime activation.
+Native service/state/executable identities remain unchanged.
 See [decision](decisions/0001-managed-updates.md), [specification](specs/06-managed-updates.md),
 [plan](plans/2026-11-10-managed-updates.md) and [publication prerequisites](releasing.md).
 
@@ -52,8 +52,11 @@ completed independent-context review is not represented as cross-vendor approval
 Public GitHub repository `moxuli/moremote-cli` exists. The owner authorized the
 first public0.1.0 release and reuse of an existing locally protected publishing
 token; its npm identity is verified without disclosing the credential. No new
-token or npm login is required. Hosted workflow execution, registry publication
-and trusted-publisher configuration require their actual receiver receipts.
+token or npm login is required. Existing organization secret `NPM_TOKEN` is
+restricted to this selected CLI repository; the release publish step reuses it.
+The workstation0.1.0 publish exited0 and npm reported processing. Independent
+anonymous registry reads still return404, so public availability is not yet
+claimed and the same immutable version must not be republished.
 
 ## Locally accepted implementation
 

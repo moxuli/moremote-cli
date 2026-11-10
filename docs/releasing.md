@@ -1,38 +1,34 @@
 # Releasing @moxuli/moremote
 
-Repository: public `moxuli/moremote-cli`; package: public `@moxuli/moremote`; executable: `moremote-cli`. No unscoped npm alias is published. This repository contains no publishing credential and workflows do not read NPM_TOKEN/NODE_AUTH_TOKEN secrets.
+Repository: public `moxuli/moremote-cli`; package: public `@moxuli/moremote`; executable: `moremote-cli`. No unscoped alias is published. Credentials never belong in this repository, release assets or package contents.
 
-## First publication and trust setup (human prerequisites)
+## Existing publishing authority
 
-The package must exist before its npm package settings can define a trusted publisher. An npm organization owner/package maintainer must establish an authenticated npm account, confirm the `@moxuli` scope/package authority and2FA policy, and explicitly authorize one **first public publication** of the validated0.1.0 tarball from a trusted workstation. This is an external release, not a CI dry run. Do not assume an org token exists, re-use a stale login, create a token automatically or publish merely to test authentication. If npm adds a pre-publication trusted-publisher reservation flow, use its current documented UI rather than guessing that the existing-package settings work for a404 package.
+The owner already provisioned organization secret `NPM_TOKEN`, restricted to this selected public CLI repository. Reuse that configuration. Do not create another token, require a new login, or block release on a web-only trusted-publisher migration. The workstation's protected publishing credential is separately loaded at point of use; do not echo it or commit an authenticated npm configuration.
 
-After that first package exists, on npmjs.com package Settings → Trusted Publisher, configure:
+The release job uses environment `npm-release`. Only its publish step receives the existing secret as `NODE_AUTH_TOKEN`; checks, dependency installation, builds and package scripts do not receive it. The temporary npm configuration contains the literal environment placeholder, pins both default and `@moxuli` registries to npmjs, has private permissions and is removed after publishing. No authentication file is packaged. Token authority/expiry and required interactive provider checks still apply; never bypass them or claim acceptance from a valid identity read alone.
 
-- provider GitHub Actions, organization `moxuli`, repository `moremote-cli`;
-- workflow filename **`release.yml`** (not its full path);
-- environment **`npm-release`**;
-- permit **direct `npm publish`** (current npm defaults may allow staged publish only).
-
-Create the matching GitHub environment, restrict it to protected release tags and add required reviewers if desired. Configure tag protection/Rulesets so only authorized maintainers can create release tags. A newly created npm trusted-publisher configuration must complete its first successful publish within the current documented two-day validation window; recreate an expired configuration rather than adding a long-lived secret fallback. For the first OIDC release, bump to a genuinely new version (for example0.1.1); npm versions cannot be overwritten. After successful OIDC publication, require2FA and disallow traditional tokens in npm publishing access, and separately revoke unused automation tokens under owner authorization. Existing organization secrets are not consumed by these workflows.
+Configure the release environment to accept authorized `v*` tags. Branch/tag protection and required reviewers remain owner-governed settings. Token replacement/revocation is a separate account action. npm trusted publishing remains an optional future migration, not an additional prerequisite for the current owner's existing setup.
 
 ## Normal release
 
-1. Keep dependencies pinned and the compatibility tuple unchanged only if storage/wire rollback is genuinely safe. Complete `npm ci --ignore-scripts`, `npm run check`, `npm run smoke:upgrade`, `node scripts/release.mjs validate vX.Y.Z` and `node scripts/release.mjs pack vX.Y.Z` using Node24.13.0. The pack command produces `moxuli-moremote-X.Y.Z.tgz` and `SHA256SUMS` from two byte-identical packs and validates archived identity/required entrypoints. These generated files are release outputs, not source files to commit.
-2. Review public package contents, changelog and external acceptance separately. Update package.json and only the lockfile root versions; do not upgrade dependencies incidentally. Commit through normal review and push the exact stable `vX.Y.Z` tag only after owner release authorization. Prerelease/range/mismatched tags fail closed.
-3. The release workflow revalidates repository/tag/package/lock identity, runs checks/build, packs deterministically, verifies the supported bundled npm version, and publishes that exact tarball with OIDC/public access/provenance. The `npm-release` environment gate applies. GitHub-hosted Ubuntu24.04 and pinned Node24.13.0 are used; no global npm upgrade occurs.
-4. Only after npm publication succeeds does it create the GitHub Release containing the identical tarball and SHA256SUMS. Release concurrency is serialized and never cancels a publishing run. Only this job receives contents:write and id-token:write; ordinary CI has contents:read, checkout credentials are not persisted, and no cache is used in release builds.
-5. If npm publish fails, no successful GitHub Release is created. If npm succeeded but GitHub creation failed, **do not republish/retag** or assume the workflow is transactional across registries. Recover the exact published npm tarball, validate its integrity and identity against the logged build artifact/checksum, and attach those bytes in a separately authorized GitHub Release operation. A rerun will honestly fail npm's immutable-version check; it never substitutes different bytes for the same version.
+1. Keep dependencies pinned. Preserve the compatibility tuple only when storage/wire rollback is genuinely safe. On Node24.13.0 run `npm ci --ignore-scripts`, `npm run check`, `npm run smoke:upgrade`, `node scripts/release.mjs validate vX.Y.Z` and `node scripts/release.mjs pack vX.Y.Z`.
+2. Review public contents and changelog. Update package.json and only lockfile root versions, commit through review, then push the exact owner-authorized stable `vX.Y.Z` tag. Prerelease/range/mismatched tags fail closed. Generated tarballs/SHA256SUMS are release outputs, not tracked source.
+3. The GitHub-hosted Ubuntu24.04 job validates repository/tag/package/lock identity, checks/builds and produces two byte-identical packs. It publishes the exact tested tarball with the existing scoped secret, public access and GitHub provenance. Node24.13.0 is pinned; no global toolchain upgrade occurs.
+4. Only after npm accepts publication does the job create a GitHub Release with the identical tarball and SHA256SUMS. Release concurrency is serialized and never cancels an in-flight publish. Only this job receives contents:write/id-token:write for release/provenance; ordinary CI is contents:read. Checkout credentials are not persisted and release builds use no cache.
+5. If npm fails, no successful GitHub Release is created. If npm accepted but GitHub creation failed, **do not republish or retag**: recover the exact published bytes, validate integrity against the accepted build artifact/checksum, and recover the GitHub Release under the owner's release authorization. npm versions are immutable.
+6. npm can acknowledge submission while processing a new package. Require an independent anonymous registry read and installation of the public exact version before claiming availability. Do not repeatedly republish while processing. Record the receiver result in STATE.
 
-CI also runs portable behavioral checks and an explicit isolated real packaged-upgrade smoke on macOS/Linux/Windows. Native service registration still requires authorized platform acceptance; no CI step installs a real login service. Physical APNs acceptance is independent of npm/release acceptance.
+The first workstation bootstrap publication is0.1.0. Subsequent automated releases must use a genuinely new version; neither workflow reruns nor corrected documentation can replace published0.1.0 bytes.
+
+CI also runs portable behavior and isolated real packaged-upgrade smoke on macOS/Linux/Windows. It never installs a real login service. Native platform managers and physical APNs are separate acceptance gates.
 
 ## Verified action pins and primary sources
 
-Official tag refs were resolved read-only from each official upstream with `git ls-remote`:
+- [`actions/checkout` v6.0.2](https://github.com/actions/checkout/tree/de0fac2e4500dabe0009e67214ff5f5447ce83dd): resolved official tag.
+- [`actions/setup-node` v6.1.0](https://github.com/actions/setup-node/tree/395ad3262231945c25e8478fd5baf05154b1d79f): resolved official tag.
+- [GitHub publishing Node packages](https://docs.github.com/en/actions/tutorials/publish-packages/publish-nodejs-packages): scoped public publishing, token use and provenance.
+- [npm provenance](https://docs.npmjs.com/generating-provenance-statements): hosted build identity is separate from npm publishing authority.
+- [npm trusted publishers](https://docs.npmjs.com/trusted-publishers/): optional future short-lived authentication migration.
 
-- [`actions/checkout` v6.0.2](https://github.com/actions/checkout/tree/de0fac2e4500dabe0009e67214ff5f5447ce83dd): `de0fac2e4500dabe0009e67214ff5f5447ce83dd`.
-- [`actions/setup-node` v6.1.0](https://github.com/actions/setup-node/tree/395ad3262231945c25e8478fd5baf05154b1d79f): `395ad3262231945c25e8478fd5baf05154b1d79f`.
-- [npm trusted publishers](https://docs.npmjs.com/trusted-publishers/): npm11.5.1+, supported hosted runners, exact workflow/environment binding, initial configuration expiry, automatic public provenance and token restrictions.
-- [GitHub publishing Node packages](https://docs.github.com/en/actions/tutorials/publish-packages/publish-nodejs-packages): package/repository metadata, scoped public publication and provenance. OIDC follows npm's newer instructions, not GitHub's optional token example.
-- [GitHub OIDC hardening](https://docs.github.com/en/actions/deployment/security-hardening-your-deployments/about-security-hardening-with-openid-connect).
-
-Do not claim a package/trusted publisher/release exists from checked-in workflow source alone. Current observed public availability/authentication and exercised checks belong in STATE.md, with no private account identifiers or credentials.
+Never infer a registry package, hosted workflow result, release or protection setting from checked-in YAML alone. Record only exercised facts, without private accounts or credential values.

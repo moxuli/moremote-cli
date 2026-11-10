@@ -70,5 +70,5 @@ Default CLI state uses `LOCALAPPDATA/MoRemoteCLI` on Windows, `~/Library/Applica
 
 [Docs](docs/README.md) · [Contributing](CONTRIBUTING.md) · [License](LICENSE) · [Notices](NOTICE)
 
-Public release prerequisites, OIDC trust setup and exact verification commands:
+Public release prerequisites, existing-secret setup and exact verification commands:
 [releasing](docs/releasing.md). Checked-in workflows are not proof of a published package.

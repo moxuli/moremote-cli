@@ -33,11 +33,14 @@ jobs:
       - run: npm run smoke:upgrade
       - name: Build byte-deterministic validated release artifact
         run: node scripts/release.mjs pack "$RELEASE_TAG"
-      - name: Verify supported trusted-publishing client and token-free environment
+      - name: Publish exact tested tarball with the existing scoped organization secret
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+          NPM_CONFIG_USERCONFIG: ${{ runner.temp }}/moremote-publish.npmrc
         run: |
-          node --input-type=module -e 'import {execFileSync} from "node:child_process"; const [a,b,c]=execFileSync("npm",["--version"],{encoding:"utf8"}).trim().split(".").map(Number); if(a<11 || a===11 && (b<5 || b===5 && c<1))throw Error("npm 11.5.1+ required"); if(process.env.NODE_AUTH_TOKEN || process.env.NPM_TOKEN)throw Error("OIDC_ONLY_REQUIRED");'
-      - name: Publish exact tested tarball through npm trusted OIDC
-        run: npm publish "moxuli-moremote-${RELEASE_TAG#v}.tgz" --ignore-scripts --access public --provenance --registry=https://registry.npmjs.org
+          node --input-type=module -e 'import {writeFileSync} from "node:fs"; if(!process.env.NODE_AUTH_TOKEN)throw Error("PUBLISH_SECRET_UNAVAILABLE"); writeFileSync(process.env.NPM_CONFIG_USERCONFIG, "registry=https://registry.npmjs.org/\n@moxuli:registry=https://registry.npmjs.org/\n//registry.npmjs.org/:_authToken=${NODE_AUTH_TOKEN}\n", {mode:0o600});'
+          trap 'rm -f "$NPM_CONFIG_USERCONFIG"' EXIT
+          npm publish "moxuli-moremote-${RELEASE_TAG#v}.tgz" --ignore-scripts --access public --provenance --registry=https://registry.npmjs.org
       - name: Create GitHub Release with exact published bytes
         env:
           GH_TOKEN: ${{ github.token }}

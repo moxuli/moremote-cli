@@ -14,6 +14,6 @@ Reject alternatives: global npm self-update (permission/package-manager ownershi
 
 ## Consequences
 
-More disk is retained; the bootstrap's implementation remains fixed until explicit service maintenance. An update cannot force progress through a hung operation. This is preferable to corrupting authority or reporting false success. Package-manager installation, npm first publication/trusted-publisher setup, OS service acceptance and physical APNs delivery remain distinct gates.
+More disk is retained; the bootstrap's implementation remains fixed until explicit service maintenance. An update cannot force progress through a hung operation. This is preferable to corrupting authority or reporting false success. Package publication, hosted release, OS service acceptance and physical APNs delivery remain distinct gates. Reuse the owner's existing selected-repository publishing secret; do not require new credentials or a web-only trust migration to release.
 
 Contracts: [managed updates](../specs/06-managed-updates.md), [release prerequisites](../releasing.md), [plan](../plans/2026-11-10-managed-updates.md).

@@ -12,7 +12,7 @@ separately gated cloud/Apple activation.
 - [Endpoint controls, occurrences and receipt lifecycle](specs/04-control-and-receipt-lifecycle.md)
 - [Endpoint and lifecycle behavior](specs/05-endpoint-and-lifecycle.md)
 - [Managed updates and compatibility](specs/06-managed-updates.md)
-- [Public release and trusted-publisher prerequisites](releasing.md)
+- [Public release and existing publishing-secret prerequisites](releasing.md)
 - [Managed-update decision](decisions/0001-managed-updates.md)
 - [Managed-update implementation plan](plans/2026-11-10-managed-updates.md)
 - [Configuration registry](configuration.md)
