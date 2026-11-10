@@ -1,0 +1,24 @@
+{
+  "description": "Synthetic public cross-runtime v1 vector; fixed key/nonce are test data only",
+  "rootKeyHex": "1111111111111111111111111111111111111111111111111111111111111111",
+  "derivedKeyHex": "802882d6da6a89e409c5ba0c40020bc7f6606522bbe2515394040e6e3b9e81ab",
+  "aad": "[1,\"11111111-1111-4111-8111-111111111111\",\"22222222-2222-4222-8222-222222222222\",\"command\",1800000000000,1800000300000]",
+  "info": "[1,\"11111111-1111-4111-8111-111111111111\",\"command\"]",
+  "plaintext": "{\"type\":\"send\",\"agentId\":\"synthetic-agent\",\"text\":\"Hello 墨序里 👋\\n第二行\",\"messageId\":\"22222222-2222-4222-8222-222222222222\"}",
+  "payload": {
+    "type": "send",
+    "agentId": "synthetic-agent",
+    "text": "Hello 墨序里 👋\n第二行",
+    "messageId": "22222222-2222-4222-8222-222222222222"
+  },
+  "envelope": {
+    "version": 1,
+    "pairId": "11111111-1111-4111-8111-111111111111",
+    "id": "22222222-2222-4222-8222-222222222222",
+    "channel": "command",
+    "issuedAt": 1800000000000,
+    "expiresAt": 1800000300000,
+    "nonce": "IiIiIiIiIiIiIiIi",
+    "ciphertext": "qaN99ylekUe9PLLoupmXW_FWnTZ16hKsaEzrpitti-W51rEiYMu9440JW23MAwp9X7PS6mSjLSWNm_177nj05plEdAPpIY206C26agcpB_LD6S7gEiwgPCMT6TK-9y6OEXSnai21uwhAeC55CxW9cWjeMDFrBlI-IdbMIeeasBOYvZsTijpgaGHCOwSkim79a4NkJLvnYA"
+  }
+}

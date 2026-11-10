@@ -1,0 +1,2 @@
+import test from 'node:test';import assert from 'node:assert/strict';import {readFile} from 'node:fs/promises';import {tokenHash} from '../src/pairing.ts';
+test('independent public bearer fixture hashes UTF-8 canonical text, not decoded bytes',async()=>{const v=JSON.parse(await readFile(new URL('../vectors/bearer-v1.json',import.meta.url),'utf8'));assert.equal(tokenHash(v.bearer),v.textSha256Hex);assert.notEqual(tokenHash(v.bearer),v.decodedBytesSha256Hex)});

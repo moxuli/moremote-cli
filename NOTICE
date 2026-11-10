@@ -1,0 +1,31 @@
+MoRemote Companion
+Copyright 2026 MoRemote Companion contributors
+Original code: Apache License, Version 2.0 (root LICENSE).
+
+This is an independent interoperability project, not an official Paseo distribution.
+
+Paseo client/protocol/relay0.15.3 provenance and retained attribution:
+Copyright (c) 2025-present Mohamed Boudra
+Official v0.15.3 annotated tag944c98a8fd802586d6d79ac375d4fd811c6545df points to commit d91ae138cb931447635e94296023414a58bedcc5. Its root LICENSE explicitly licenses non-third-party Paseo code under Apache-2.0 and retains third-party components under their own terms. Exact upstream license text is retained in licenses/Paseo-0.15.3.txt. This conclusion comes from that release's source LICENSE, not absent npm license fields.
+License: https://raw.githubusercontent.com/getpaseo/paseo/d91ae138cb931447635e94296023414a58bedcc5/LICENSE
+Release reference: https://api.github.com/repos/getpaseo/paseo/git/tags/944c98a8fd802586d6d79ac375d4fd811c6545df
+Matching client package: https://github.com/getpaseo/paseo/blob/d91ae138cb931447635e94296023414a58bedcc5/packages/client/package.json
+Matching protocol package: https://github.com/getpaseo/paseo/blob/d91ae138cb931447635e94296023414a58bedcc5/packages/protocol/package.json
+The corresponding npm distributions are pinned exactly to0.15.3 with integrity metadata in package-lock.json. No claim of a signed npm-to-source attestation is made; the tag is unsigned and npm metadata supplies no gitHead.
+
+Local-credential target normalization/authentication in src/official-client.ts is adapted from the official interface with bounded read-only I/O and a separate companion identity. This is changed independent companion code; no official daemon files are modified. The exported internal SDK interface is unsupported upstream and intentionally exact-version-pinned and exercised by wire consumers.
+
+qrcode1.5.4 — retained upstream license:
+
+The MIT License (MIT)
+
+Copyright (c) 2012 Ryan Day
+
+Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the "Software"), to deal in the Software without restriction, including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+
+
+Other dependencies retain their own licenses/notices in their npm distributions. The root Apache license does not relicense third-party components. No public publication has occurred.

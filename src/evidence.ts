@@ -1,0 +1,4 @@
+import {createHash} from 'node:crypto';import {canonical} from './journal.js';import type {Command} from './operations.js';
+export type Evidence=({type:'send';serverId:string;agentId:string;messageId:string;textDigest:string}|{type:'permission';serverId:string;agentId:string;requestId:string;requestBinding:string;responseDigest:string})&{occurrenceId?:string};
+export function contentDigest(value:string){return createHash('sha256').update(value).digest('hex')}
+export function evidenceForCommand(command:Command,serverId:string):Evidence{return command.type==='send'?{type:'send',serverId,agentId:command.agentId,messageId:command.messageId,textDigest:contentDigest(command.text)}:{type:'permission',serverId,agentId:command.agentId,requestId:command.requestId,requestBinding:command.requestBinding,responseDigest:contentDigest(canonical(command.response))}}
