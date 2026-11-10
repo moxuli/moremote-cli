@@ -41,6 +41,14 @@ Owner-approved notification/scoped delivery and local activity/widget integratio
   independently observed. Genuine device reply/approval receipts and remote
   ActivityKit/WidgetKit acceptance remain open. Existing official software and
   daily-work sessions were not modified; no new npm release or permanent service.
+- Fresh local end-to-end action acceptance passes against the unchanged official
+  development mock, production runtime, real Pages/Worker/SQLite and a compiled
+  unchanged native Kit/CryptoKit slice. Exact send and bound plan denial each
+  execute once and produce authenticated accepted/resolved receipts; initial and
+  post-settlement identical retries cannot redispatch or change receipts. Both
+  SQLite journals retain exactly two settled operations. This is not physical
+  locked-notification UI or whole native-package acceptance. Earlier observer and
+  incidental-prose harness failures were corrected without product exceptions.
 
 ## Approved identity cutover — locally verified
 
