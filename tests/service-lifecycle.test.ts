@@ -12,7 +12,7 @@ const executableFixtures={skip:process.platform==='win32'?'POSIX executable mana
 async function fixture(){
  const dir=await mkdtemp(join(tmpdir(),'moremote-cli-service-'));
  const bin=join(dir,'tools'),home=join(dir,'home'),data=join(dir,'data'),state=join(dir,'manager.json'),log=join(dir,'commands.jsonl');
- await Promise.all([mkdir(bin),mkdir(home),mkdir(data)]);
+ await Promise.all([mkdir(bin),mkdir(home),mkdir(data,{mode:0o700})]);
  const saved={PATH:process.env.PATH,XDG_CONFIG_HOME:process.env.XDG_CONFIG_HOME,npm_execpath:process.env.npm_execpath,SERVICE_FIXTURE:process.env.SERVICE_FIXTURE,SERVICE_LOG:process.env.SERVICE_LOG};
  process.env.PATH=bin;process.env.XDG_CONFIG_HOME=join(home,'.config');process.env.SERVICE_FIXTURE=state;process.env.SERVICE_LOG=log;
  const script=`#!${process.execPath}
@@ -121,7 +121,7 @@ test('service installation rejects existing and dangling symlinks without extern
 test('managed updates preserve selected bytes and path across failure and a new verified version',async()=>{
  const f=await fixture();try{
  const npm=join(f.dir,'npm-cli.js');process.env.npm_execpath=npm;
- await writeFile(npm,`const fs=require('node:fs'),path=require('node:path');const args=process.argv.slice(2),prefix=args[args.indexOf('--prefix')+1],version=args.at(-1).split('@').at(-1),root=path.join(prefix,'node_modules','moremote-cli');fs.mkdirSync(path.join(root,'bin'),{recursive:true});fs.mkdirSync(path.join(root,'dist'));fs.writeFileSync(path.join(root,'package.json'),JSON.stringify({name:'moremote-cli',version:version==='2.0.0'?'0.0.0':version}));fs.writeFileSync(path.join(root,'bin','moremote-cli.js'),'installed '+version);fs.writeFileSync(path.join(root,'dist','cli.js'),'build '+version);if(version==='3.0.0')process.exit(1);`);
+ await writeFile(npm,`const fs=require('node:fs'),path=require('node:path');const args=process.argv.slice(2),prefix=args[args.indexOf('--prefix')+1],version=args.at(-1).split('@').at(-1),root=path.join(prefix,'node_modules','@moxuli','moremote');fs.mkdirSync(path.join(root,'bin'),{recursive:true});fs.mkdirSync(path.join(root,'dist'));fs.writeFileSync(path.join(root,'package.json'),JSON.stringify({name:'@moxuli/moremote',version:version==='2.0.0'?'0.0.0':version}));fs.writeFileSync(path.join(root,'bin','moremote-cli.js'),'installed '+version);fs.writeFileSync(path.join(root,'dist','cli.js'),'build '+version);if(version==='3.0.0')process.exit(1);`);
  const first=await updatePackage(f.data,'1.0.0');assert.equal(first,await managedEntry(f.data,'1.0.0'));
  const original=await readFile(first);const definition=serviceDefinition('darwin',f.home,process.execPath,first,f.data);await writeDefinition(definition);const registration=await readFile(definition.path);
  const installedFiles=[join(dirname(dirname(first)),'package.json'),join(dirname(dirname(first)),'dist','cli.js')];

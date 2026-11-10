@@ -4,7 +4,8 @@ import { join,dirname } from 'node:path';
 import { homedir,userInfo } from 'node:os';
 import { constants } from 'node:fs';
 import { mkdir,readFile,unlink,access,lstat,open,rename,link,mkdtemp,rm } from 'node:fs/promises';
-import {privateManagedDirectory} from './config.js';
+import {privateDirectory,privateManagedDirectory} from './config.js';
+import {PACKAGE,exactVersion,updateLock} from './update-state.js';
 const taskName='\\MoRemoteCLI';
 function xml(s:string){return s.replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('>','&gt;').replaceAll('"','&quot;').replaceAll("'",'&apos;')}
 function systemd(s:string){if(/[\r\n\0]/.test(s))throw Error('INVALID_SERVICE_PATH');return '"'+s.replaceAll('\\','\\\\').replaceAll('"','\\"').replaceAll('%','%%').replaceAll('$',()=> '$$')+'"'}
@@ -20,15 +21,16 @@ export function serviceDefinition(platform:string,home:string,node:string,entry:
 class CommandFailure extends Error{
  constructor(readonly program:string,readonly status:number|null,readonly output:string){super('COMMAND_FAILED_'+program+'_'+status)}
 }
-export function command(program:string,args:string[],capture=true):Promise<string>{
+export function command(program:string,args:string[],capture=true,timeout=120000):Promise<string>{
  const {promise,resolve,reject}=Promise.withResolvers<string>();
  const child=spawn(program,args,{stdio:capture?['ignore','pipe','pipe']:'inherit',shell:false,windowsHide:true});
+ let timedOut=false;const timer=setTimeout(()=>{timedOut=true;child.kill('SIGKILL');},timeout);timer.unref();
  let output='',tooLarge=false;
  if(capture)for(const stream of [child.stdout,child.stderr])stream?.on('data',chunk=>{
   output+=chunk;if(output.length>65536){tooLarge=true;child.kill()}
  });
- child.once('error',reject);
- child.once('close',code=>tooLarge?reject(Error('COMMAND_OUTPUT_LIMIT')):code===0?resolve(output):reject(new CommandFailure(program,code,output)));
+ child.once('error',error=>{clearTimeout(timer);reject(error)});
+ child.once('close',code=>{clearTimeout(timer);timedOut?reject(Error('COMMAND_TIMEOUT')):tooLarge?reject(Error('COMMAND_OUTPUT_LIMIT')):code===0?resolve(output):reject(new CommandFailure(program,code,output))});
  return promise;
 }
 function missing(error:unknown){return error instanceof Error&&'code' in error&&error.code==='ENOENT'}
@@ -119,7 +121,7 @@ export async function installService(def:ServiceDefinition){
  else if(def.platform==='linux'){
   await command('systemctl',['--user','daemon-reload']);
   await command('systemctl',['--user','enable','--now','moremote-cli.service']);
- }else await command('schtasks',['/Create','/TN',taskName,'/XML',def.path,'/F']);
+ }else {await command('schtasks',['/Create','/TN',taskName,'/XML',def.path,'/F']);await command('schtasks',['/Run','/TN',taskName])}
 }
 export async function stopService(def:ServiceDefinition){
  const status=await serviceStatus(def);requireKnown(status);
@@ -140,23 +142,20 @@ export async function removeService(def:ServiceDefinition){
  await unlink(def.path);
  if(def.platform==='linux')await command('systemctl',['--user','daemon-reload']);
 }
-function exactVersion(version:string){
- if(!/^(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)(?:-[0-9A-Za-z.-]+)?$/.test(version))throw Error('EXACT_VERSION_REQUIRED');
-}
 async function directory(path:string){
  const stat=await lstat(path);
- if(!stat.isDirectory()||stat.isSymbolicLink())throw Error('FOREIGN_MANAGED_DIRECTORY');
+ if(!stat.isDirectory()||stat.isSymbolicLink()||process.getuid&&stat.uid!==process.getuid())throw Error('FOREIGN_MANAGED_DIRECTORY');
 }
 async function regular(path:string){
  const stat=await lstat(path);
- if(!stat.isFile()||stat.isSymbolicLink())throw Error('INVALID_MANAGED_INSTALL');
+ if(!stat.isFile()||stat.isSymbolicLink()||stat.nlink!==1||process.getuid&&stat.uid!==process.getuid())throw Error('INVALID_MANAGED_INSTALL');
 }
 async function verifiedEntry(prefix:string,version:string){
- for(const path of [prefix,join(prefix,'node_modules'),join(prefix,'node_modules','moremote-cli')])await directory(path);
- const root=join(prefix,'node_modules','moremote-cli'),manifest=join(root,'package.json');
+ for(const path of [prefix,join(prefix,'node_modules'),join(prefix,'node_modules','@moxuli'),join(prefix,'node_modules','@moxuli','moremote')])await directory(path);
+ const root=join(prefix,'node_modules','@moxuli','moremote'),manifest=join(root,'package.json');
  await regular(manifest);
  const pkg:unknown=JSON.parse(await readFile(manifest,'utf8'));
- if(typeof pkg!=='object'||pkg===null||!('name' in pkg)||pkg.name!=='moremote-cli'||!('version' in pkg)||pkg.version!==version)throw Error('UPDATE_IDENTITY_MISMATCH');
+ if(typeof pkg!=='object'||pkg===null||!('name' in pkg)||pkg.name!==PACKAGE||!('version' in pkg)||pkg.version!==version)throw Error('UPDATE_IDENTITY_MISMATCH');
  for(const path of [join(root,'bin'),join(root,'dist')])await directory(path);
  const entry=join(root,'bin','moremote-cli.js');
  await regular(entry);await regular(join(root,'dist','cli.js'));return entry;
@@ -167,6 +166,11 @@ export async function managedEntry(dir:string,version:string){
  return verifiedEntry(join(dir,'managed','versions',version),version);
 }
 export async function updatePackage(dir:string,version:string){
+ exactVersion(version);await privateDirectory(dir);await privateManagedDirectory(join(dir,'managed'));await privateManagedDirectory(join(dir,'managed','versions'));
+ return updateLock(dir,()=>stagePackage(dir,version));
+}
+// Caller holds the updater writer lock through installation and state publication.
+export async function stagePackage(dir:string,version:string){
  exactVersion(version);
  const managed=join(dir,'managed'),versions=join(managed,'versions'),destination=join(versions,version);
  await privateManagedDirectory(managed);await privateManagedDirectory(versions);
@@ -179,7 +183,7 @@ export async function updatePackage(dir:string,version:string){
  if(!npmCli)throw Error('NPM_CLI_NOT_FOUND');
  const staging=await mkdtemp(join(versions,'.install-'));
  try{
-  await command(process.execPath,[npmCli,'install','--prefix',staging,'--ignore-scripts','--no-audit','--no-fund','--save-exact','--registry=https://registry.npmjs.org','moremote-cli@'+version]);
+  await command(process.execPath,[npmCli,'install','--prefix',staging,'--ignore-scripts','--no-audit','--no-fund','--save-exact','--fetch-retries=0','--fetch-timeout=60000','--registry=https://registry.npmjs.org','--@moxuli:registry=https://registry.npmjs.org',PACKAGE+'@'+version],true,120000);
   await verifiedEntry(staging,version);
   await rename(staging,destination);
   return managedEntry(dir,version);

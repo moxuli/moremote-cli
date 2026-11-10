@@ -96,7 +96,7 @@ are separate app delivery units, not unfinished companion implementations.
 
 ## Subsequent owner-approved CLI identity cutover — 2026-11-10
 
-Canonical product: **MoRemote CLI**; repository/npm/command: `moremote-cli`;
+Canonical product: **MoRemote CLI**; repository/command: `moremote-cli`; current public npm identity: `@moxuli/moremote`;
 entry: `bin/moremote-cli.js`; state override: `MOREMOTE_CLI_HOME`.
 macOS/Windows state is `MoRemoteCLI`; Linux state is `moremote-cli`. Services
 are `com.moremote.cli`, `moremote-cli.service` and Windows logon task `MoRemoteCLI`.

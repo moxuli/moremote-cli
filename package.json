@@ -1,10 +1,14 @@
 {
-  "name": "moremote-cli",
+  "name": "@moxuli/moremote",
   "version": "0.1.0",
   "description": "Optional encrypted notification and scoped-action companion for Paseo",
   "license": "Apache-2.0",
   "type": "module",
-  "private": true,
+  "repository": {"type": "git", "url": "git+https://github.com/moxuli/moremote-cli.git"},
+  "homepage": "https://github.com/moxuli/moremote-cli#readme",
+  "bugs": {"url": "https://github.com/moxuli/moremote-cli/issues"},
+  "publishConfig": {"access": "public", "registry": "https://registry.npmjs.org"},
+  "moremote": {"updateProtocol": 1, "journalSchema": 1, "wireProtocol": 1},
   "files": ["bin", "dist", "docs", "vectors", "licenses", "LICENSE", "NOTICE", "README.md"],
   "engines": {
     "node": ">=24.13.0 <25"
@@ -16,7 +20,8 @@
     "build": "tsc -p tsconfig.json",
     "typecheck": "tsc --noEmit",
     "test": "node --import tsx --test tests/*.test.ts",
-    "check": "npm run typecheck && npm test && npm run build"
+    "check": "npm run typecheck && npm test && npm run build",
+    "smoke:upgrade": "node scripts/smoke-upgrade.mjs"
   },
   "dependencies": {
     "@getpaseo/client": "0.15.3",

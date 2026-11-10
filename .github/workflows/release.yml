@@ -1,0 +1,44 @@
+name: Release
+on:
+  push:
+    tags: ['v*']
+permissions:
+  contents: read
+concurrency:
+  group: release-${{ github.repository }}
+  cancel-in-progress: false
+jobs:
+  release:
+    if: github.repository == 'moxuli/moremote-cli'
+    runs-on: ubuntu-24.04
+    environment: npm-release
+    timeout-minutes: 20
+    permissions:
+      contents: write
+      id-token: write
+    env:
+      RELEASE_TAG: ${{ github.ref_name }}
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@395ad3262231945c25e8478fd5baf05154b1d79f # v6.1.0
+        with:
+          node-version: 24.13.0
+          package-manager-cache: false
+      - name: Validate identity and tag before any release work
+        run: node scripts/release.mjs validate "$RELEASE_TAG"
+      - run: npm ci --ignore-scripts
+      - run: npm run check
+      - run: npm run smoke:upgrade
+      - name: Build byte-deterministic validated release artifact
+        run: node scripts/release.mjs pack "$RELEASE_TAG"
+      - name: Verify supported trusted-publishing client and token-free environment
+        run: |
+          node --input-type=module -e 'import {execFileSync} from "node:child_process"; const [a,b,c]=execFileSync("npm",["--version"],{encoding:"utf8"}).trim().split(".").map(Number); if(a<11 || a===11 && (b<5 || b===5 && c<1))throw Error("npm 11.5.1+ required"); if(process.env.NODE_AUTH_TOKEN || process.env.NPM_TOKEN)throw Error("OIDC_ONLY_REQUIRED");'
+      - name: Publish exact tested tarball through npm trusted OIDC
+        run: npm publish "moxuli-moremote-${RELEASE_TAG#v}.tgz" --ignore-scripts --access public --provenance --registry=https://registry.npmjs.org
+      - name: Create GitHub Release with exact published bytes
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release create "$RELEASE_TAG" "moxuli-moremote-${RELEASE_TAG#v}.tgz" SHA256SUMS --verify-tag --title "$RELEASE_TAG" --generate-notes

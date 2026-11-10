@@ -50,7 +50,7 @@ async function fixture(options:{receiptFailure?:boolean;stateLosses?:number;reti
  };
  const close=async()=>{try{await stop()}finally{for(const socket of daemon.clients)socket.terminate();relay.closeAllConnections();const daemonClosed=Promise.withResolvers<void>(),relayClosed=Promise.withResolvers<void>();daemon.close(()=>daemonClosed.resolve());relay.close(()=>relayClosed.resolve());try{await bounded(Promise.all([daemonClosed.promise,relayClosed.promise]),2200,'FIXTURE_SERVER_CLOSE_TIMEOUT')}finally{await rm(root,{recursive:true,force:true})}}};
  const start=()=>{assert.ok(Buffer.byteLength(controlEndpoint(dir))<100||process.platform==='win32');child=spawn(process.execPath,['--import','tsx','--input-type=module','--eval',"import {runRuntime} from './src/runtime.ts';let offset=0;const now=Date.now;Date.now=()=>now()+offset;process.on('message',m=>{if(m.type==='advance')offset+=m.ms});await runRuntime(process.argv[1]);process.disconnect();",dir],{cwd:fileURLToPath(new URL('..',import.meta.url)),stdio:['ignore','ignore','inherit','ipc']});exited=once(child,'exit');};
- return {root,dir,counts,states,controlsAt,requests,pausedAt:()=>pauseAt,now,start,stop,close,advance:(ms:number)=>child!.send({type:'advance',ms}),alive:()=>!!child&&child.exitCode===null&&child.signalCode===null};
+ return {root,dir,counts,states,controlsAt,requests,pausedAt:()=>pauseAt,now,start,stop,close,drain:()=>child!.send({kind:'moremote-drain'}),advance:(ms:number)=>child!.send({type:'advance',ms}),alive:()=>!!child&&child.exitCode===null&&child.signalCode===null};
 }
 
 test('actual runtime keeps notifications and command acquisition alive at 3s cadence despite retained receipt and state publication failures',{timeout:20000},async()=>{
@@ -89,5 +89,15 @@ test('actual runtime reacquires controls after a receipt pause expires inside a 
   f.start();await until(()=>f.pausedAt()>0&&f.counts.snapshots>0,'SLOW_SNAPSHOT_DID_NOT_FOLLOW_RECEIPT_PAUSE');const guarded=f.requests.find(request=>request.path.endsWith('/receipt'));assert.ok(guarded);const count=f.requests.length;
   await until(()=>f.counts.commands>0,'NEXT_CONTROL_CYCLE_DID_NOT_RESUME',16000);const resumed=f.requests[count];assert.ok(resumed);assert.ok(resumed.at-f.pausedAt()>=6000,'snapshot must actually outlast the server pause');assert.equal(resumed.method,'GET');assert.ok(resumed.path.endsWith('/controls'),'an expired pause cannot reuse the control acquisition from before the pause');
   const retried=f.requests.slice(count).find(request=>request.path===guarded.path);assert.ok(retried);assert.deepEqual(retried.body,guarded.body,'cycle fencing must retain the original immutable unsent receipt');assert.equal(f.counts.mutations,0);
+ }finally{await f.close()}
+});
+
+test('parent update drain completes the actual in-flight cycle and releases journal/control ownership without replay',{timeout:12000},async()=>{
+ const f=await fixture({snapshotDelayMs:1500,seedReceipt:true});try{
+  f.start();await until(()=>f.counts.snapshots>0,'IN_FLIGHT_CYCLE_NOT_REACHED');f.drain();
+  await until(()=>!f.alive(),'DRAIN_NEVER_FINISHED');
+  assert.equal(f.counts.commands,1,'drain must finish acquisition in its existing cycle, not cancel the SDK await or enter another cycle');
+  assert.equal(f.states.length,1);assert.equal(f.counts.mutations,0);assert.equal(await requestControl(f.dir,'status'),null);
+  const journal=new OperationJournal(join(f.dir,'journal.sqlite'));try{assert.equal(journal.get(pairId,id)?.state,'accepted')}finally{journal.close()}
  }finally{await f.close()}
 });

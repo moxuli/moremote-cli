@@ -3,3 +3,5 @@ dist/
 *.sqlite*
 *.log
 .DS_Store
+*.tgz
+SHA256SUMS

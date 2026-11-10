@@ -2,7 +2,7 @@
 
 ## 0.1.0 — unreleased
 
-- Completed the owner-approved identity cutover (2026-11-10): MoRemote CLI, repository/npm/command `moremote-cli`, entry `bin/moremote-cli.js`, `MOREMOTE_CLI_HOME`, platform state `MoRemoteCLI`/`moremote-cli`, and separately owned CLI service/runtime identities. No compatibility alias or automatic old-state adoption; protocol/crypto/app identities remain unchanged.
+- Completed the owner-approved identity cutover (2026-11-10): MoRemote CLI, repository/command `moremote-cli`, public npm `@moxuli/moremote`, entry `bin/moremote-cli.js`, `MOREMOTE_CLI_HOME`, platform state `MoRemoteCLI`/`moremote-cli`, and separately owned CLI service/runtime identities. No compatibility alias or automatic old-state adoption; protocol/crypto/app identities remain unchanged.
 - Optional Node24 companion using pinned official Paseo client/protocol0.15.3 without modifying the official daemon or iOS vector floor.
 - Local per-phone endpoint-root QR enrollment, one-use proof activation and standalone HKDF/AES-GCM contract/reference fixture.
 - Bounded encrypted state/attention, scoped send/current question/approval operations, FULL-sync SQLite dispatch journal and truthful acceptance/resolution/unknown receipts without automatic mutation replay.
@@ -24,3 +24,8 @@
 - Fence relay-retired pairs locally without forging an endpoint revoke receipt; end automatic recovery at original retained-child deadlines.
 - Honor validated HTTP429/503 Retry-After deadlines for at most24hours per origin, without renewing operation authority or automatically replaying uncertain mutations.
 - Fence the origin through the remainder of a paused runtime cycle even if the deadline expires during a slow SDK snapshot; reacquire controls before resuming publication/recovery/command work. Keep unrelated origins independent.
+- Default-on private managed updates for installed packages: immutable exact scoped prefixes, retained service bootstrap, persisted bounded discovery, independent opt-out, storage/wire compatibility gate, cycle-safe IPC handoff, startup rollback and failed-candidate suppression.
+- Add portable CI/real packaged-upgrade acceptance and tag-validated deterministic npm artifacts, public GitHub Releases and token-free trusted OIDC publishing. First package publication/trusted-publisher setup remains an explicit external prerequisite.
+- Compare canonical frontend entry paths to prevent recursive selected-CLI respawn through parent-directory aliases (including macOS `/tmp` → `/private/tmp`). Packaged-upgrade acceptance covers an explicit parent symlink/junction, bounded stages, owned-process teardown and preserved failure evidence.
+- Release runtime control ownership and SQLite handles on journal initialization failure; propagate delegated termination and parent IPC loss through supervisor shutdown; allow stable upgrades from explicit prereleases; pin both default and scoped npm registries against inherited scope overrides.
+- Await positive initialized-runtime IPC readiness instead of probing unpublished socket stages; make truncated/empty control responses explicit, preserving strict foreign-resource checks and requiring observed owner retirement before reporting absence.

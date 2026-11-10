@@ -25,6 +25,8 @@ export async function requestControl(dir:string,action:'status'|'stop'):Promise<
  if(process.platform!=='win32'&&!resources.socket)return null;
  const expectedRecord=resources.record.identity;
  const record=resources.record.value;
+ const ownerEnded=()=>{const path=join(dir,'runtime.json');if(!inspectResource(path,'file',true))return true;const current=readRuntimeRecord(path);return !sameResource(current.identity,expectedRecord)||!runtimeMatches(current.value,record)};
+ const disconnected=()=>{try{if(ownerEnded())resolve(null);else reject(Error('CONTROL_CONNECTION_CLOSED'))}catch(error){reject(error)}};
  const {promise,resolve,reject}=Promise.withResolvers<Record<string,unknown>|null>();
  const socket=createConnection(controlEndpoint(dir));let raw='';
  socket.setTimeout(2000);
@@ -36,9 +38,9 @@ export async function requestControl(dir:string,action:'status'|'stop'):Promise<
   } catch(error) {socket.destroy(error instanceof Error?error:Error('CONTROL_INVALID'));}
  });
  socket.on('data',chunk=>{raw+=chunk;if(Buffer.byteLength(raw)>4096)socket.destroy(Error('CONTROL_LIMIT'));});
- socket.on('end',()=>{try {const value:unknown=JSON.parse(raw);if(!object(value))throw Error('CONTROL_INVALID');resolve(value);} catch(error) {reject(error);}});
+ socket.on('end',()=>{if(!raw){disconnected();return}try{const value:unknown=JSON.parse(raw);if(!object(value))throw Error('CONTROL_INVALID_RESPONSE');resolve(value)}catch{reject(Error('CONTROL_INVALID_RESPONSE'))}});
  socket.on('timeout',()=>socket.destroy(Error('CONTROL_TIMEOUT')));
- socket.on('error',error=>{if(hasCode(error,'ECONNREFUSED')||hasCode(error,'ENOENT'))resolve(null);else reject(error);});
+ socket.on('error',error=>{if(hasCode(error,'ECONNREFUSED')||hasCode(error,'ENOENT'))resolve(null);else if(hasCode(error,'ECONNRESET')||hasCode(error,'EPIPE'))disconnected();else reject(error)});
  return promise;
 }
 function closeServer(server:Server) {

@@ -33,14 +33,21 @@ async function observeRelayRetirement(config:Config,dir:string,pair:Pair,cloud:C
 }
 // An elapsed deadline still fences the cycle that observed it.
 function retryPaused(error:unknown){return error instanceof CloudError&&error.retryAt!==undefined}
-export async function runRuntime(dir:string){
- await privateDirectory(dir);let stopped=false;let official:OfficialClient|undefined;let stage='starting';let lastError:string|null=null;let activePairs=0;
- const controller=new AbortController();const stop=()=>{stopped=true;controller.abort();void official?.sdk.close().catch(()=>{})};const release=await ownRuntime(dir,()=>({stage,lastError,activePairs}),stop);const journal=new OperationJournal(join(dir,'journal.sqlite'));
- const attentionQueue:Attention[]=[];let detach:(()=>void)|undefined;let backoff:number=LIMITS.pollMs;let measuredAt=0;let snapshot:Awaited<ReturnType<OfficialClient['snapshot']>>|undefined;
+export async function runRuntime(dir:string,version?:string){
+ await privateDirectory(dir);let stopped=false,draining=false;let official:OfficialClient|undefined;let stage='starting';let lastError:string|null=null;let activePairs=0;
+ const controller=new AbortController();const stop=()=>{stopped=true;controller.abort();void official?.sdk.close().catch(()=>{})};
+ const drainWake=new AbortController();const parentMessage=(message:unknown)=>{if(message&&typeof message==='object'&&'kind' in message&&message.kind==='moremote-drain'){draining=true;drainWake.abort()}};
+ const parentGone=()=>{draining=true;drainWake.abort()};
+ let detach:(()=>void)|undefined,closeJournal:(()=>void)|undefined;
+ const release=await ownRuntime(dir,()=>({stage,lastError,activePairs,version:version??null}),stop);
+ try{
+ const journal=new OperationJournal(join(dir,'journal.sqlite'));closeJournal=()=>journal.close();
+ if(process.send){process.on('message',parentMessage);process.on('disconnect',parentGone);if(!process.connected)parentGone();else process.send({kind:'moremote-ready'},undefined,undefined,()=>{})}
+ const attentionQueue:Attention[]=[];let backoff:number=LIMITS.pollMs;let measuredAt=0;let snapshot:Awaited<ReturnType<OfficialClient['snapshot']>>|undefined;
  const statePublications=new Map<string,{envelope:Envelope;acknowledged:boolean}>();
  const retryStates=new Map<string,CloudRetryState>();const pollOrigins=new Set<string>();
  process.once('SIGINT',stop);process.once('SIGTERM',stop);
- try{while(!stopped){try{
+ while(!stopped&&!draining){try{
  const now=Date.now();journal.cleanup(now);const config=await loadConfig(dir);pollOrigins.clear();let failure:unknown=null;let acquisitionFailed=false;const clouds=new Map<string,CloudClient>();const cycleFences=new Map<string,CloudRetryState>();
  for(const pair of config.pairs){const revokedAt=journal.revocationTime(pair.pairId);if(revokedAt!==undefined&&pair.revokedAt===undefined){pair.active=false;pair.revokedAt=revokedAt;await saveConfig(dir,config)}if(pair.relayRetiredAt!==undefined)pair.active=false}
  // Prune before any request: a retained 404 must not extend automatic recovery.
@@ -94,6 +101,7 @@ export async function runRuntime(dir:string){
  const wakeNow=Date.now();let retryWake=Infinity;
  for(const origin of pollOrigins){const retryAt=retryStates.get(origin)?.error?.retryAt;if(retryAt===undefined||retryAt<=wakeNow){retryWake=wakeNow;break}retryWake=Math.min(retryWake,retryAt)}
  if(Number.isFinite(retryWake)&&retryWake>wakeNow)backoff=Math.max(backoff,retryWake-wakeNow);
- await sleep(backoff,undefined,{signal:controller.signal}).catch(()=>{});
- }}finally{process.removeListener('SIGINT',stop);process.removeListener('SIGTERM',stop);detach?.();await official?.close().catch(()=>{});journal.close();await release()}
+ if(draining)break;
+ await sleep(backoff,undefined,{signal:AbortSignal.any([controller.signal,drainWake.signal])}).catch(()=>{});
+ }}finally{process.removeListener('SIGINT',stop);process.removeListener('SIGTERM',stop);process.removeListener('message',parentMessage);process.removeListener('disconnect',parentGone);try{detach?.();await official?.close().catch(()=>{})}finally{try{closeJournal?.()}finally{await release()}}}
 }

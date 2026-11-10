@@ -7,7 +7,7 @@ Owner-approved notification/scoped-delivery first iteration; Apache-2.0. Standal
 ## Approved identity cutover — locally verified
 
 The owner approved the complete rename to **MoRemote CLI** on 2026-11-10:
-repository/npm/command `moremote-cli`, entry `bin/moremote-cli.js`,
+repository/command `moremote-cli`, current public npm `@moxuli/moremote`, entry `bin/moremote-cli.js`,
 `MOREMOTE_CLI_HOME`, state `MoRemoteCLI` on macOS/Windows and `moremote-cli`
 on Linux, and services `com.moremote.cli` / `moremote-cli.service` / `MoRemoteCLI`.
 Ownership/runtime/client/managed-package identities move together. There is no
@@ -27,6 +27,33 @@ resource, key, permission and billing-sensitive mutations still require
 point-of-risk interactive confirmation. No production or device acceptance is
 claimed by this approval; publication and everyday-host service installation
 remain separate gates.
+
+## Managed updates and release — local acceptance complete
+
+The owner authorized public scoped npm identity `@moxuli/moremote`, retained
+private bootstrap/supervisor, cycle-safe automatic runtime activation and OIDC
+release workflows. Native service/state/executable identities remain unchanged.
+See [decision](decisions/0001-managed-updates.md), [specification](specs/06-managed-updates.md),
+[plan](plans/2026-11-10-managed-updates.md) and [publication prerequisites](releasing.md).
+
+The parent exercised the real packaged upgrade9000.0.1→9000.0.2, retained
+bootstrap/previous version, frontend through a parent symlink and clean owned
+shutdown. No everyday service was installed. The first full126-case run had123
+passes and three lifecycle-readiness failures; after correction, all21focused
+control/initialization/frontend cases, types, build and packaged smoke passed.
+Do not describe those separate runs as a newly green full suite.
+
+Independent source review's four findings are closed: initialization cleanup,
+termination/parent-death propagation, prerelease precedence and exact scoped
+npm registry pinning. The final control-response/readiness delta also has no
+actionable P1/P2 finding. Cross-provider review timed out without a report; the
+completed independent-context review is not represented as cross-vendor approval.
+
+Public GitHub repository `moxuli/moremote-cli` exists. The owner authorized the
+first public0.1.0 release and reuse of an existing locally protected publishing
+token; its npm identity is verified without disclosing the credential. No new
+token or npm login is required. Hosted workflow execution, registry publication
+and trusted-publisher configuration require their actual receiver receipts.
 
 ## Locally accepted implementation
 
@@ -97,7 +124,7 @@ Official tag v0.15.3 points to commit d91ae138cb931447635e94296023414a58bedcc5. 
 ## External gates / substrate gaps
 
 - Independent specification and quality/security reviews and frozen local check results belong to the integration owner.
-- No published repository/package, hosted CI, issue tracker, automatic release scheduler or branch protections have been provisioned. npm update intentionally reports a missing version as failure until a separately authorized real publication exists.
+- Public GitHub repository exists; CI/release workflow source is prepared but no hosted run, tag/release, npm publication, trusted publisher, scheduler or branch/tag protection is claimed. Unpublished npm404 is a real update failure, persisted with bounded discovery rather than a retry storm or fake success.
 - Real per-user launchd/systemd/Windows logon-task installation requires point-of-use operator authorization and testing on each OS; adapters are source, not evidence of another OS’s acceptance.
 - No everyday login service, real work-session action, DNS/cloud deployment, paid model call, Apple key/capability change or public publication has been performed.
 - Production Cloudflare storage/network reachability, Apple provider signing and app topic/environment, actual iOS app enrollment and physical APNs delivery are real external setup/acceptance requirements. Emulation is not proof of delivery.

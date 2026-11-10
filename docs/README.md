@@ -1,7 +1,7 @@
 # Documentation index
 
-**MoRemote CLI**: independent optional `moremote-cli` repository/npm/command
-over unmodified Paseo. The full owner-approved rename is locally verified.
+**MoRemote CLI**: independent optional `moremote-cli` repository/command,
+public npm `@moxuli/moremote`, over unmodified Paseo.
 STATE distinguishes historical pre-rename acceptance, renamed-tree checks and
 separately gated cloud/Apple activation.
 
@@ -11,6 +11,10 @@ separately gated cloud/Apple activation.
 - [Relay HTTP contract v1](specs/03-api-contract.md)
 - [Endpoint controls, occurrences and receipt lifecycle](specs/04-control-and-receipt-lifecycle.md)
 - [Endpoint and lifecycle behavior](specs/05-endpoint-and-lifecycle.md)
+- [Managed updates and compatibility](specs/06-managed-updates.md)
+- [Public release and trusted-publisher prerequisites](releasing.md)
+- [Managed-update decision](decisions/0001-managed-updates.md)
+- [Managed-update implementation plan](plans/2026-11-10-managed-updates.md)
 - [Configuration registry](configuration.md)
 - [Conventions](conventions.md)
 - [Implementation plan](plans/2026-11-10-notification-delivery.md)

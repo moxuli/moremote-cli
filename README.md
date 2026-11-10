@@ -2,11 +2,22 @@
 
 Optional, independent Apache-2.0 computer companion for MoRemote and an **unmodified Paseo 0.15.3** daemon. Existing official-only clients keep working without this project or its cloud.
 
-Canonical repository, npm package and command: `moremote-cli`; source entry:
-`bin/moremote-cli.js`. The owner approved the full rename on 2026-11-10.
-The unpublished former identity `moremote-companion` has no compatibility alias
-or automatic old-state adoption. The renamed source, compiled command and package
-identity are locally verified; production notification delivery remains gated.
+Canonical repository/command: `moremote-cli`; public npm package:
+**`@moxuli/moremote`**; source entry: `bin/moremote-cli.js`.
+There is no unscoped npm alias or automatic adoption of foreign/old state.
+
+## Install the published package
+
+```sh
+npm install -g @moxuli/moremote
+moremote-cli --help
+```
+
+Requires an available public package and a user-owned npm prefix; never use sudo
+or upgrade global Node/tools on this project's behalf. First installed-package
+`run` or explicit `service-install --yes` creates an independently owned private
+managed installation with automatic updates enabled. Source-checkout `run`
+alone stays manual. No command starts/upgrades the official daemon.
 
 ## Build and foreground use
 
@@ -47,7 +58,8 @@ Endpoint cancellation/revocation uses authenticated encrypted controls and durab
 - `stop`: stop only the owned companion registration/runtime; never signal an official process. Linux/Windows registration remains available for a future login; macOS bootout leaves its owned plist available for explicit reinstallation.
 - `unpair --pair-id <exact-id>`: revoke one phone, leaving other phones unchanged. Stop the runtime first.
 - `cloud-disable`: stop the companion, persist local cloud-off and per-pair execution tombstones, then relay-revoke every own pairing when reachable. An unreachable relay is pending, not success; local execution remains off. Run again to retry relay revocation. Protected keys are retained for final read-only control/outcome audit; they do not restore execution authority.
-- `update --version X.Y.Z --yes`: explicit npm installation of only that exact companion version into a separate immutable `managed/versions/X.Y.Z` directory, with lifecycle scripts disabled and identity/build-file checks before atomic promotion. A failed update leaves previously verified versions and the registered executable untouched. No Paseo update. No silent service retarget: run `service-install --yes` to select it. Until an authorized package publication exists, unavailable versions fail honestly. Service lifecycle commands reject symlinked/foreign registration files and fail closed when the native manager cannot establish registration state.
+- `update --version X.Y.Z --yes`: install only exact `@moxuli/moremote` into immutable private state with scripts disabled and queue a compatible candidate. A running managed supervisor drains only at a whole journalled-cycle boundary, starts the candidate and rolls back on startup failure; no service reinstallation is needed. Previously verified prefixes and bootstrap are retained. No global npm/Paseo/Node change. A staged package is never called active; use `status` for actual runtime.version and active/pending/previous/error/check facts.
+- `auto-update --disable` / `auto-update --enable`: durable opt-out/in. Default managed checks are at most every six hours, including after restart; quota pauses can delay them. Disable wins during staging/drain and prevents queued activation until re-enabled. Foreign/read-only state fails visibly. Source-checkout/manual mode is explicit in status. See [update contracts](docs/specs/06-managed-updates.md).
 - `uninstall --yes`: remove only owned registration/managed package; retain keys and dedupe journal. `--purge` explicitly deletes companion state too. It cannot erase cloud records while offline and does not undo dispatched actions. Disable/revoke cloud before purging. Source checkouts/global-package removal belongs to the tool that installed them.
 
 Default CLI state uses `LOCALAPPDATA/MoRemoteCLI` on Windows, `~/Library/Application Support/MoRemoteCLI` on macOS, or `XDG_STATE_HOME/moremote-cli` (fallback `~/.local/state/moremote-cli`) on Linux. Override with `MOREMOTE_CLI_HOME` or `--data-dir`. Service identities are `com.moremote.cli` (macOS), `moremote-cli.service` (Linux) and `MoRemoteCLI` (Windows logon task). Private POSIX directory/file modes are 0700/0600; Windows relies on the user profile ACL, which operators must protect. Keep it separate from official Paseo data; never point it at an official data directory.
@@ -57,3 +69,6 @@ Default CLI state uses `LOCALAPPDATA/MoRemoteCLI` on Windows, `~/Library/Applica
 `npm run check` runs typecheck, behavioral tests and compilation. Tests use synthetic data/temp directories, no real host session, login registration, deployment or APNs call. Integration instructions and unexercised gates are in [STATE](docs/STATE.md). Real native notification delivery requires separately configured/deployed Cloudflare and Apple APNs credentials/capabilities, an authorized app build and a physical device. Cross-OS service installation and isolated real-daemon acceptance are separate checks; local tests cannot prove them.
 
 [Docs](docs/README.md) · [Contributing](CONTRIBUTING.md) · [License](LICENSE) · [Notices](NOTICE)
+
+Public release prerequisites, OIDC trust setup and exact verification commands:
+[releasing](docs/releasing.md). Checked-in workflows are not proof of a published package.
