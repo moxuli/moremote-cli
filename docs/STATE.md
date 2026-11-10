@@ -74,7 +74,23 @@ Final types,35focused control/lifecycle/CLI consumers, build and actual publishe
 previous selection, both transport generations, selected frontend and clean
 shutdown without a service/cloud/official-data mutation. Independent review
 closes the mixed-transport finding with no remaining actionable P1/P2 issue.
-Hosted final Windows acceptance and tag publishing still need receiver results.
+Hosted CI42826719991 passes all three jobs: Ubuntu24.04, macOS15 and
+Windows2025, including each platform's check/build, release identity validation
+and real packaged upgrade. Source is `dad3d964b9ab144b646316a543e5d36151f8c210`.
+Tagv0.1.1 targets that exact source. Automatic Release42827612987 completed
+successfully using the existing organization secret: check/build, packaged
+upgrade, deterministic artifact, signed GitHub provenance, npm submission and
+GitHub Release all passed. No new token, login or trusted-publisher setup.
+
+Independent anonymous npm catalog read confirms latest0.1.1; a fresh installation
+by exact public package name runs0.1.1. The downloaded GitHub asset matches its
+SHA256SUMS and npm's SHA1/SHA512 integrity. GitHub asset SHA256:
+`358574ca750d27c8a116743cd729d7ab830c41fc17045ddfa46ff808ff3bba3b`.
+The actual release asset separately runs configure/status with cloud off and
+no runtime/service. Both submissions initially reported asynchronous processing;
+the same immutable version was never republished.
+
+Release: https://github.com/moxuli/moremote-cli/releases/tag/v0.1.1
 Environment `npm-release` has a `v*` tag-only deployment policy; no new secret
 was created.
 
@@ -147,9 +163,9 @@ Official tag v0.15.3 points to commit d91ae138cb931447635e94296023414a58bedcc5. 
 ## External gates / substrate gaps
 
 - Independent specification and quality/security reviews and frozen local check results belong to the integration owner.
-- Public GitHub repository exists; CI/release workflow source is prepared but no hosted run, tag/release, npm publication, trusted publisher, scheduler or branch/tag protection is claimed. Unpublished npm404 is a real update failure, persisted with bounded discovery rather than a retry storm or fake success.
+- Hosted cross-platform CI, exactv0.1.1 tag, npm publication, signed provenance and GitHub assets are verified above. Environment deployment is `v*`-tag-only. No broader branch/tag Ruleset or trusted-publisher migration is claimed.
 - Real per-user launchd/systemd/Windows logon-task installation requires point-of-use operator authorization and testing on each OS; adapters are source, not evidence of another OS’s acceptance.
-- No everyday login service, real work-session action, DNS/cloud deployment, paid model call, Apple key/capability change or public publication has been performed.
-- Production Cloudflare storage/network reachability, Apple provider signing and app topic/environment, actual iOS app enrollment and physical APNs delivery are real external setup/acceptance requirements. Emulation is not proof of delivery.
+- No everyday login service, real-work-session send/approval or paid-model task was exercised. Native service-manager installation still needs explicit per-platform operator acceptance.
+- One authorized synthetic sandbox alert was observed on a real iPad through the independent cloud/app path. This is not genuine permission/reply execution, production TestFlight delivery or terminated-app acceptance; emulation and artifact installation do not establish those gates.
 
 Continue from this file and living specs, not private machine history. Record exercised evidence here before claiming a verified release.
