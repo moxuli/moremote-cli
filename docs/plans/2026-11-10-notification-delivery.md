@@ -105,11 +105,11 @@ released package or installed service to migrate; use no compatibility alias or
 automatic old-state adoption. Preserve foreign-resource protections, protocol
 role `companionHello`, crypto salt/schema, APNs categories and app/Keychain IDs.
 
-The implementation and root move are in progress; integration-owner fresh
-checks, compiled command/isolated-state smoke and independent reviews are
-pending. The verification journal above records the former
-`moremote-companion` identity, not renamed-tree acceptance. Keep this plan filename
-stable and use current commands from README/STATE for reproduction.
+The implementation and root move are complete. Fresh source, compiled-command,
+isolated-state and package checks pass; independent identity/quality review
+findings are closed. STATE records exact full-suite and later focused-delta
+evidence separately. Earlier verification used `moremote-companion`; keep its
+historical transcript and this plan filename stable.
 
 Proceeding toward cloud/Apple activation is also owner-approved, with exact
 resource/key/permission/billing mutations requiring point-of-risk interactive

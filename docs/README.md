@@ -1,9 +1,9 @@
 # Documentation index
 
 **MoRemote CLI**: independent optional `moremote-cli` repository/npm/command
-over unmodified Paseo. The full owner-approved rename is in progress; fresh
-verification is pending. STATE distinguishes historical pre-rename acceptance
-from current reproduction commands and separately gated cloud/Apple activation.
+over unmodified Paseo. The full owner-approved rename is locally verified.
+STATE distinguishes historical pre-rename acceptance, renamed-tree checks and
+separately gated cloud/Apple activation.
 
 - [Current state and external gates](STATE.md)
 - [Architecture](specs/01-architecture.md)

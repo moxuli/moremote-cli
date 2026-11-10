@@ -20,7 +20,7 @@ move together; no legacy alias or old-state adoption is provided. Configuration
 and service names are listed in the configuration registry. Protocol role
 `companionHello`, cryptographic salt/envelope schema, APNs categories and the
 app/Keychain identities are deliberately preserved. Earlier local acceptance
-predates the rename; verification of this cutover remains pending in STATE.
+predates the rename; STATE records fresh renamed-tree verification separately.
 
 ## Runtime
 
