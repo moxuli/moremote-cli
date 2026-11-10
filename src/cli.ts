@@ -41,7 +41,12 @@ const parsed=(()=>{try{return parseArgs({args:versionOnly?[]:process.argv.slice(
 const args=parsed.values;const action=parsed.positionals[0];
 async function stopped(dir:string){if(await requestControl(dir,'status'))throw Error('STOP_CLI_BEFORE_CONFIGURATION')}
 async function stopRuntime(dir:string){if(!await requestControl(dir,'stop'))return;for(let i=0;i<300;i++){await sleep(200);if(!await requestControl(dir,'status'))return}throw Error('STOP_TIMEOUT')}
-async function stopManaged(dir:string){requestSupervisorStop(dir);await stopRuntime(dir);if(readUpdateState(dir))for(let i=0;i<900;i++){if(!supervisorRunning(dir))return;await sleep(200)}if(readUpdateState(dir)&&supervisorRunning(dir))throw Error('SUPERVISOR_STOP_TIMEOUT')}
+async function stopManaged(dir:string){
+ requestSupervisorStop(dir);let legacyUnavailable=false;
+ try{await stopRuntime(dir)}catch(error){if(error instanceof Error&&error.message==='LEGACY_WINDOWS_CONTROL_UNAVAILABLE'&&readUpdateState(dir))legacyUnavailable=true;else throw error}
+ if(readUpdateState(dir))for(let i=0;i<900;i++){if(!supervisorRunning(dir)){if(legacyUnavailable&&await requestControl(dir,'status'))throw Error('STOP_TIMEOUT');return}await sleep(200)}
+ if(readUpdateState(dir)&&supervisorRunning(dir))throw Error('SUPERVISOR_STOP_TIMEOUT');
+}
 async function stopOwned(dir:string,definition:ServiceDefinition){await stopService(definition);await stopManaged(dir)}
 async function main(){
  if(args.help||!action){console.log(HELP);return}if(action==='version'){console.log(VERSION);return}

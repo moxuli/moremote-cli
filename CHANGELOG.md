@@ -1,6 +1,12 @@
 # Changelog
 
-## 0.1.0 — unreleased
+## 0.1.1 — 2026-11-10
+
+- Fix real Windows named-pipe request/response delivery using bounded frames without prematurely half-closing the channel; retain authentication, absolute deadlines and owned cleanup.
+- Preserve control during mixed-version activation/rollback using explicit owned runtime transport facts, not timeout-based operation replay.
+- Reuse the preexisting selected-repository organization secret for tag releases, with publishing credentials confined to the publish step. First0.1.0 npm publication is independently installable; no new token or mandatory browser trust setup.
+
+## 0.1.0 — 2026-11-10
 
 - Completed the owner-approved identity cutover (2026-11-10): MoRemote CLI, repository/command `moremote-cli`, public npm `@moxuli/moremote`, entry `bin/moremote-cli.js`, `MOREMOTE_CLI_HOME`, platform state `MoRemoteCLI`/`moremote-cli`, and separately owned CLI service/runtime identities. No compatibility alias or automatic old-state adoption; protocol/crypto/app identities remain unchanged.
 - Optional Node24 companion using pinned official Paseo client/protocol0.15.3 without modifying the official daemon or iOS vector floor.

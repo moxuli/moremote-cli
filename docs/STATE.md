@@ -54,9 +54,29 @@ first public0.1.0 release and reuse of an existing locally protected publishing
 token; its npm identity is verified without disclosing the credential. No new
 token or npm login is required. Existing organization secret `NPM_TOKEN` is
 restricted to this selected CLI repository; the release publish step reuses it.
-The workstation0.1.0 publish exited0 and npm reported processing. Independent
-anonymous registry reads still return404, so public availability is not yet
-claimed and the same immutable version must not be republished.
+Workstation0.1.0 publication is independently visible through the anonymous npm
+registry. Published tarball SHA256 is
+`6bf3cab16245745f5f9d43026687cff880ca081f106f195d6abe40a169c5efd6`;
+registry SHA1 matches and a fresh exact public install runs version/help/
+configure/status with cloud off, no runtime/pairs and no installed service.
+Initial asynchronous404 processing was observed; publication was not repeated.
+
+Hosted CI42821005843 accepts Ubuntu24.04 and macOS15 check/build/package-upgrade;
+Windows2025 reports8control-transport failures (112pass/10explicit POSIX skips).
+The correction is patch0.1.1: generation-bound transport selection preserves the
+published strict runtime shape; framed peers avoid Windows half-close, while
+known legacy POSIX transport is selected before exactly one write, never replayed.
+Historical0.1.0 Windows EOF control remains explicitly unavailable/unknown;
+managed stop requires real supervisor/runtime retirement evidence.
+
+Final types,35focused control/lifecycle/CLI consumers, build and actual published
+0.1.0 retained-bootstrap→0.1.1 archive upgrade pass. The latter verifies active/
+previous selection, both transport generations, selected frontend and clean
+shutdown without a service/cloud/official-data mutation. Independent review
+closes the mixed-transport finding with no remaining actionable P1/P2 issue.
+Hosted final Windows acceptance and tag publishing still need receiver results.
+Environment `npm-release` has a `v*` tag-only deployment policy; no new secret
+was created.
 
 ## Locally accepted implementation
 
