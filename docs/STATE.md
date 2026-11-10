@@ -28,10 +28,19 @@ Owner-approved notification/scoped delivery and local activity/widget integratio
   token replacement/expiry acceptance; separately authorized live cloud/APNs
   delivery. APNs200 is provider admission, not delivery. Historical alert proof
   below does not cover either new surface.
-- Cloud remains **DISABLED** in this phase. No deployment, account/device
-  mutation, release or everyday service installation is authorized here.
-  Continue autonomously from these living docs within that boundary; record
-  actual evidence before advancing an external gate.
+- A later owner-approved bounded physical acceptance observed all four attention
+  kinds through the actual official mock → companion → cloud → sandbox APNs path.
+  Duplicate completion and premature request-resolution bugs were exposed and
+  corrected locally; this is not real paid-model or production-service evidence.
+- The request lifecycle and canonical terminal-identity corrections pass13focused
+  consumers plus typecheck. A later reverse-order wire regression first failed
+  both SDK variants, then both passed with typecheck after observation-order
+  fencing. Independent same-provider review reports no blocker; the preferred
+  cross-vendor provider was unavailable.
+- Cloud is again **DISABLED**, production provider secrets restored and public503
+  independently observed. Genuine device reply/approval receipts and remote
+  ActivityKit/WidgetKit acceptance remain open. Existing official software and
+  daily-work sessions were not modified; no new npm release or permanent service.
 
 ## Approved identity cutover — locally verified
 

@@ -18,7 +18,9 @@ function stableId(value:unknown){const h=createHash('sha256').update(JSON.string
 export async function queueAttention(journal:OperationJournal,pair:Pair,event:Attention&{sourceFingerprint?:string;occurrence?:Occurrence},now=Date.now()){
  if(event.timestamp+LIMITS.snapshotMs<=now||event.timestamp>now+LIMITS.futureMs)return;
  const payload:Attention={agentId:event.agentId,kind:event.kind,timestamp:event.timestamp,...(event.requestId?{requestId:event.requestId}:{}),...(event.requestBinding?{requestBinding:event.requestBinding}:{})};
- const id=stableId([pair.pairId,event.agentId,event.kind,event.requestId||'',event.sourceFingerprint||'',event.requestId&&!event.sourceFingerprint?null:event.timestamp]);const issuedAt=event.timestamp;const envelope=await sealEnvelope(decode(pair.rootKey,32),{version:1,pairId:pair.pairId,id,channel:'attention',issuedAt,expiresAt:issuedAt+LIMITS.snapshotMs},payload);
+ // A bound request notice belongs to its exact occurrence, not its snapshot clock.
+ // Keep the legacy source identity for callers without authoritative occurrences.
+ const id=event.requestId&&event.occurrence?stableId([pair.pairId,event.agentId,event.kind,event.requestId,'occurrence',event.occurrence.occurrenceId]):stableId([pair.pairId,event.agentId,event.kind,event.requestId||'',event.sourceFingerprint||'',event.requestId&&!event.sourceFingerprint?null:event.timestamp]);const issuedAt=event.timestamp;const envelope=await sealEnvelope(decode(pair.rootKey,32),{version:1,pairId:pair.pairId,id,channel:'attention',issuedAt,expiresAt:issuedAt+LIMITS.snapshotMs},payload);
  const topic=await presenceTopic(decode(pair.rootKey,32),pair.pairId,event.agentId);if(event.occurrence&&!journal.isCurrent(event.occurrence))return;
  journal.queueAttention(pair.pairId,id,envelope.expiresAt,{id,kind:event.kind,topic,envelope},payload);
 }
