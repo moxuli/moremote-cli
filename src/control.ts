@@ -4,7 +4,7 @@ import { join } from 'node:path';
 import { chmodSync, renameSync, readdirSync } from 'node:fs';
 import { assertStateRoot, createPrivateFile, hasCode, inspectResource, inspectRuntime, readRuntimeOwner, readRuntimeRecord, removeOwnedResource, runtimeMatches, RUNTIME_OWNER, sameResource, writePrivateAtomic, type ResourceIdentity, type RuntimeOwner } from './resources.js';
 
-export function controlEndpoint(dir:string) {return process.platform==='win32'?'\\\\.\\pipe\\moremote-companion-'+createHash('sha256').update(dir).digest('hex').slice(0,24):join(dir,'runtime.sock');}
+export function controlEndpoint(dir:string) {return process.platform==='win32'?'\\\\.\\pipe\\moremote-cli-'+createHash('sha256').update(dir).digest('hex').slice(0,24):join(dir,'runtime.sock');}
 function object(value:unknown):value is Record<string,unknown> {return typeof value==='object'&&value!==null&&!Array.isArray(value);}
 function removeRuntimeFile(path:string,identity:ResourceIdentity,owner:RuntimeOwner,record=false) {
  try {
@@ -58,7 +58,7 @@ export async function ownRuntime(dir:string,status:()=>unknown,stop:()=>void) {
  const endpoint=controlEndpoint(dir);
  if(process.platform==='win32'&&!previous.lock) {await assertPipeAbsent(endpoint);previous=inspectRuntime(dir);}
  // Validate every collision before replacing any lock, record or socket.
- if(previous.lock&&running(previous.lock.value.pid))throw Error('COMPANION_ALREADY_RUNNING');
+ if(previous.lock&&running(previous.lock.value.pid))throw Error('CLI_ALREADY_RUNNING');
  if(previous.socket&&!previous.record&&!(previous.lock?.value.staging&&sameResource(previous.socket,previous.lock.value.staging)))throw Error('RUNTIME_RESOURCE_COLLISION');
  if(previous.staged) {
   if(!previous.lock)throw Error('RUNTIME_UNPROVEN_STAGE');

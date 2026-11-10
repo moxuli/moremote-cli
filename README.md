@@ -1,6 +1,12 @@
-# MoRemote Companion
+# MoRemote CLI
 
 Optional, independent Apache-2.0 computer companion for MoRemote and an **unmodified Paseo 0.15.3** daemon. Existing official-only clients keep working without this project or its cloud.
+
+Canonical repository, npm package and command: `moremote-cli`; source entry:
+`bin/moremote-cli.js`. The owner approved the full rename on 2026-11-10.
+The unpublished former identity `moremote-companion` has no compatibility alias
+or automatic old-state adoption. The renamed source, compiled command and package
+identity are locally verified; production notification delivery remains gated.
 
 ## Build and foreground use
 
@@ -9,10 +15,10 @@ Requires Node **24.13.0 or later on Node 24** and npm. No installer scripts or s
 ```sh
 npm ci --ignore-scripts
 npm run build
-node bin/moremote-companion.js --help
-node bin/moremote-companion.js configure --target 127.0.0.1:6767
-node bin/moremote-companion.js check --connect
-node bin/moremote-companion.js run
+node bin/moremote-cli.js --help
+node bin/moremote-cli.js configure --target 127.0.0.1:6767
+node bin/moremote-cli.js check --connect
+node bin/moremote-cli.js run
 ```
 
 The example endpoint is synthetic. Omit `--target` to use the official `paseo.pid` listen address under `PASEO_HOME` (otherwise the platform home’s `.paseo`). Auth follows the official CLI: target password, then `PASEO_PASSWORD`, otherwise a rotating local credential only when the selected target exactly matches the pid listen address after official normalization. Credentials are never printed or uploaded. No automatic daemon start or upgrade.
@@ -20,9 +26,9 @@ The example endpoint is synthetic. Omit `--target` to use the official `paseo.pi
 For a separately operated relay:
 
 ```sh
-node bin/moremote-companion.js configure --api-origin https://relay.example.test --cloud-on
-node bin/moremote-companion.js pair
-node bin/moremote-companion.js run
+node bin/moremote-cli.js configure --api-origin https://relay.example.test --cloud-on
+node bin/moremote-cli.js pair
+node bin/moremote-cli.js run
 ```
 
 `pair` explicitly prints a **secret**, ten-minute, one-phone QR/link. Do not share screenshots or put it in logs. `--json` emits the canonical offer for explicit paste. It waits for the one-use claim and verifies the phone’s encrypted proof before activating that phone, within the original offer deadline. Each phone gets its own local 32-byte root key; only the phone receives it, never the relay. See [wire contracts](docs/specs/02-encrypted-delivery.md), [endpoint controls](docs/specs/04-control-and-receipt-lifecycle.md) and [endpoint behavior](docs/specs/05-endpoint-and-lifecycle.md).
@@ -44,7 +50,7 @@ Endpoint cancellation/revocation uses authenticated encrypted controls and durab
 - `update --version X.Y.Z --yes`: explicit npm installation of only that exact companion version into a separate immutable `managed/versions/X.Y.Z` directory, with lifecycle scripts disabled and identity/build-file checks before atomic promotion. A failed update leaves previously verified versions and the registered executable untouched. No Paseo update. No silent service retarget: run `service-install --yes` to select it. Until an authorized package publication exists, unavailable versions fail honestly. Service lifecycle commands reject symlinked/foreign registration files and fail closed when the native manager cannot establish registration state.
 - `uninstall --yes`: remove only owned registration/managed package; retain keys and dedupe journal. `--purge` explicitly deletes companion state too. It cannot erase cloud records while offline and does not undo dispatched actions. Disable/revoke cloud before purging. Source checkouts/global-package removal belongs to the tool that installed them.
 
-Default companion state uses `LOCALAPPDATA/MoRemoteCompanion` on Windows, the user Application Support directory on macOS, or `XDG_STATE_HOME/moremote-companion` (fallback `~/.local/state`) on Linux. Override with `MOREMOTE_COMPANION_HOME` or `--data-dir`. Private POSIX directory/file modes are 0700/0600; Windows relies on the user profile ACL, which operators must protect. Keep it separate from official Paseo data; never point it at an official data directory.
+Default CLI state uses `LOCALAPPDATA/MoRemoteCLI` on Windows, `~/Library/Application Support/MoRemoteCLI` on macOS, or `XDG_STATE_HOME/moremote-cli` (fallback `~/.local/state/moremote-cli`) on Linux. Override with `MOREMOTE_CLI_HOME` or `--data-dir`. Service identities are `com.moremote.cli` (macOS), `moremote-cli.service` (Linux) and `MoRemoteCLI` (Windows logon task). Private POSIX directory/file modes are 0700/0600; Windows relies on the user profile ACL, which operators must protect. Keep it separate from official Paseo data; never point it at an official data directory.
 
 ## Checks and real external gates
 

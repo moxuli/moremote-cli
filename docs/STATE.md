@@ -4,6 +4,30 @@
 
 Owner-approved notification/scoped-delivery first iteration; Apache-2.0. Standalone Node24 companion targeting inspected official SDK/protocol 0.15.3. Existing iOS protocol-vector floor is independent and unchanged. OpenUI, system extensions and broader native surfaces belong to later app iterations.
 
+## Approved identity cutover — locally verified
+
+The owner approved the complete rename to **MoRemote CLI** on 2026-11-10:
+repository/npm/command `moremote-cli`, entry `bin/moremote-cli.js`,
+`MOREMOTE_CLI_HOME`, state `MoRemoteCLI` on macOS/Windows and `moremote-cli`
+on Linux, and services `com.moremote.cli` / `moremote-cli.service` / `MoRemoteCLI`.
+Ownership/runtime/client/managed-package identities move together. There is no
+released package or installed service to migrate: no compatibility aliases or
+automatic adoption of old state. Foreign-resource protections remain strict.
+The `companionHello` role, crypto salt/envelope schema, APNs categories and
+app/Keychain identities are unchanged.
+
+The source/documentation cutover and root-directory move are complete. Parent
+verified the renamed source, real compiled command, isolated local state and
+package contents; independent source review accepted the identity contract.
+Historical local acceptance below used the former `moremote-companion` identity;
+its execution transcript remains historically accurate.
+
+The owner also approved proceeding toward cloud/Apple activation. Exact
+resource, key, permission and billing-sensitive mutations still require
+point-of-risk interactive confirmation. No production or device acceptance is
+claimed by this approval; publication and everyday-host service installation
+remain separate gates.
+
 ## Locally accepted implementation
 
 Real CLI configure/check/pair/run/status/service-install/unpair/cloud-disable/update/stop/uninstall; per-user ownership adapters; one-phone deadline-bounded proof activation; WebCrypto HKDF/AES-GCM; standalone02/03/04 contracts and independent envelope/bearer vectors; actual official SDK narrow observation/send/question/approval adapter; SQLite FULL-sync dispatch/control/occurrence/attention journal; bounded encrypted state. Independent-review corrections include endpoint-authenticated cancel/revoke, immutable acknowledgements, source/generation request bindings, exact question mapping, monotonic receipts, separate24h minimal audit retention and attention invalidation. No builds, tests, formatters, actual user services or real host session mutations have been run by this worker; dependency installation used --ignore-scripts.
@@ -25,15 +49,31 @@ Evidence below was reported by the integration owner; implementation workers did
 - Actual three-party journey passed: compiled CLI configured and authenticated read-only to an isolated official0.15.3 daemon; native production Kit/CryptoKit enrolled through actual Pages→Worker→SQLite and verified the exact daemon activation proof.
 - Actual foreground runtime status was cloud-enabled with one active synthetic pair, no runtime error and no installed service. A native immutable command retry to a nonexistent synthetic target received an authenticated rejection, not execution; encrypted revoke obtained the companion's durable authenticated acknowledgement, followed by narrow post-revoke outcome audit.
 - Public-source privacy check found no private owner/account/team/production identifiers. No official agent was created, no model invoked, no real session mutated, and no public release or cloud deployment occurred.
+- Renamed-tree combined `npm run check` passed typecheck,100/100 behavioral tests
+  and build. Actual compiled help/version/configure/check/status all exited0 in
+  temporary `MOREMOTE_CLI_HOME`, cloud off and no runtime/service/official
+  connection. Package dry-run contains54files, the canonical bin and no obsolete
+  runtime identity in packaged bin/dist; no package was published.
+- Cost corrections stop active-pair GET/acknowledged state/receipt amplification
+  and bound relay-retired recovery. HTTP quota/operator pauses preserve fixed
+  deadlines, original immutable bytes and independent origin cadence.
+- Initial Retry-After selection failed11/24 before correction. Its focused29case
+  selection passed. A later independent P1 review exposed pause expiry inside a
+  slow official snapshot; the real-runtime regression failed with PUT preceding
+  the required GET controls. The cycle-fence correction then passed31/31 focused
+  cases plus typecheck/build. This delta is not a newly run combined full suite.
+- Independent P1 re-review closed with no new blockers. Multi-origin/multiple-pair
+  actual runtime behavior remains unexercised beyond the scoped client/fixture
+  checks; source review is not cross-platform or production acceptance.
 
 
 ## Reproduction commands
 
 1. npm ci --ignore-scripts
 2. npm run check
-3. node bin/moremote-companion.js --help
-4. node bin/moremote-companion.js --version
-5. With a synthetic temporary MOREMOTE_COMPANION_HOME, run check, configure, status. Do not install services in ordinary CI.
+3. node bin/moremote-cli.js --help
+4. node bin/moremote-cli.js --version
+5. With a synthetic temporary MOREMOTE_CLI_HOME, run check, configure, status. Do not install services in ordinary CI.
 6. Against an explicitly isolated official0.15.3 daemon: configure its exact target/home, check --connect, then run; inspect traffic for only narrow subscriptions/read RPCs and no heartbeat/read acknowledgement/push registration. Use synthetic conversations for explicit send and actual pending question/approval tests. Verify accepted admission separately from agent completion and simulate socket loss after dispatch without replay.
 7. Run the independent cloud’s local SQLite-backed Worker, configure explicit loopback development at both ends, pair a synthetic endpoint using the public contract, submit an encrypted command and validate its exact encrypted receipt. No repository runtime imports are needed.
 
@@ -42,8 +82,8 @@ Evidence below was reported by the integration owner; implementation workers did
 Use an already-authorized isolated0.15.3 daemon, empty isolated user home and an unused selected port. Do not point this at everyday Paseo data. The companion commands are:
 
 ```sh
-HOME="$SANDBOX/user" PASEO_PASSWORD= node bin/moremote-companion.js configure --data-dir "$SANDBOX/companion" --paseo-home "$SANDBOX/daemon" --target "127.0.0.1:$PASEO_TEST_PORT"
-HOME="$SANDBOX/user" PASEO_PASSWORD= node bin/moremote-companion.js check --connect --data-dir "$SANDBOX/companion"
+HOME="$SANDBOX/user" PASEO_PASSWORD= node bin/moremote-cli.js configure --data-dir "$SANDBOX/cli" --paseo-home "$SANDBOX/daemon" --target "127.0.0.1:$PASEO_TEST_PORT"
+HOME="$SANDBOX/user" PASEO_PASSWORD= node bin/moremote-cli.js check --connect --data-dir "$SANDBOX/cli"
 ```
 
 If no isolated daemon exists, an operator can explicitly authorize and run `paseo onboard --home "$SANDBOX/daemon" --listen "127.0.0.1:$PASEO_TEST_PORT" --no-relay --no-mcp --voice disable --json` with HOME set to "$SANDBOX/user"; afterward `paseo daemon stop --home "$SANDBOX/daemon"`. The owner exercised this isolated read-only setup for local acceptance. It neither created an agent nor called a provider/model. Reuse an already-authorized isolated daemon instead of starting a second one during verification.

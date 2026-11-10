@@ -1,5 +1,5 @@
 {
-  "name": "moremote-companion",
+  "name": "moremote-cli",
   "version": "0.1.0",
   "description": "Optional encrypted notification and scoped-action companion for Paseo",
   "license": "Apache-2.0",
@@ -10,7 +10,7 @@
     "node": ">=24.13.0 <25"
   },
   "bin": {
-    "moremote-companion": "bin/moremote-companion.js"
+    "moremote-cli": "bin/moremote-cli.js"
   },
   "scripts": {
     "build": "tsc -p tsconfig.json",

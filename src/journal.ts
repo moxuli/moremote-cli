@@ -5,7 +5,7 @@ import type {Envelope} from './crypto.js';
 import {LIMITS} from './limits.js';
 import type {Evidence} from './evidence.js';
 export type ReceiptState='accepted'|'resolved'|'rejected'|'unknown';
-export interface JournalRecord{pairId:string;id:string;digest:string;expiresAt:number;state:'prepared'|'dispatched'|ReceiptState;envelope:Envelope|null;receipt:Envelope|null;code:string|null;revision:number;evidence:Evidence|null}
+export interface JournalRecord{pairId:string;id:string;digest:string;expiresAt:number;state:'prepared'|'dispatched'|ReceiptState;envelope:Envelope|null;receipt:Envelope|null;code:string|null;revision:number;sentRevision:number;evidence:Evidence|null}
 export interface Occurrence{occurrenceId:string;serverId:string;agentId:string;requestId:string;generation:string;fingerprint:string;active:number;createdAt:number}
 export function digest(value:unknown){return createHash('sha256').update(JSON.stringify(value)).digest('hex')}
 export function canonical(value:unknown):string{if(value===null||typeof value!=='object')return JSON.stringify(value)??'null';if(Array.isArray(value))return '['+value.map(canonical).join(',')+']';return '{'+Object.keys(value).filter(k=>(value as Record<string,unknown>)[k]!==undefined).sort().map(k=>JSON.stringify(k)+':'+canonical((value as Record<string,unknown>)[k])).join(',')+'}'}

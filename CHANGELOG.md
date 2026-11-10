@@ -2,6 +2,7 @@
 
 ## 0.1.0 — unreleased
 
+- Completed the owner-approved identity cutover (2026-11-10): MoRemote CLI, repository/npm/command `moremote-cli`, entry `bin/moremote-cli.js`, `MOREMOTE_CLI_HOME`, platform state `MoRemoteCLI`/`moremote-cli`, and separately owned CLI service/runtime identities. No compatibility alias or automatic old-state adoption; protocol/crypto/app identities remain unchanged.
 - Optional Node24 companion using pinned official Paseo client/protocol0.15.3 without modifying the official daemon or iOS vector floor.
 - Local per-phone endpoint-root QR enrollment, one-use proof activation and standalone HKDF/AES-GCM contract/reference fixture.
 - Bounded encrypted state/attention, scoped send/current question/approval operations, FULL-sync SQLite dispatch journal and truthful acceptance/resolution/unknown receipts without automatic mutation replay.
@@ -19,3 +20,7 @@
 - Make wire-fixture failure cleanup independent of release RPCs: validate complete responses, echo release subscription IDs, cancel timers, and close every tracked SDK/socket/server/database through bounded teardown.
 - Locally verified compiled CLI and native production Kit enrollment through actual Pages/Worker/SQLite, immutable command rejection, durable endpoint revocation and retained authenticated audit; production notification delivery remains separately gated.
 - Keep subprocess privacy regressions focused on leaked private bytes and failure outcomes rather than incidental Node warning wording.
+- Publish each measured encrypted snapshot once after an exact lost-ack retry; stop repeated active-pair reads and acknowledged receipt uploads without delaying ordinary command/control acquisition.
+- Fence relay-retired pairs locally without forging an endpoint revoke receipt; end automatic recovery at original retained-child deadlines.
+- Honor validated HTTP429/503 Retry-After deadlines for at most24hours per origin, without renewing operation authority or automatically replaying uncertain mutations.
+- Fence the origin through the remainder of a paused runtime cycle even if the deadline expires during a slow SDK snapshot; reacquire controls before resuming publication/recovery/command work. Keep unrelated origins independent.

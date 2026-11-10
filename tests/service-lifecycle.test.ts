@@ -10,7 +10,7 @@ import type { ServiceDefinition } from '../src/service.ts';
 const platforms=['darwin','linux','win32'];
 const executableFixtures={skip:process.platform==='win32'?'POSIX executable manager fixtures; Windows task adapter is exercised on POSIX without native registration':false};
 async function fixture(){
- const dir=await mkdtemp(join(tmpdir(),'companion-service-'));
+ const dir=await mkdtemp(join(tmpdir(),'moremote-cli-service-'));
  const bin=join(dir,'tools'),home=join(dir,'home'),data=join(dir,'data'),state=join(dir,'manager.json'),log=join(dir,'commands.jsonl');
  await Promise.all([mkdir(bin),mkdir(home),mkdir(data)]);
  const saved={PATH:process.env.PATH,XDG_CONFIG_HOME:process.env.XDG_CONFIG_HOME,npm_execpath:process.env.npm_execpath,SERVICE_FIXTURE:process.env.SERVICE_FIXTURE,SERVICE_LOG:process.env.SERVICE_LOG};
@@ -22,8 +22,8 @@ fs.appendFileSync(process.env.SERVICE_LOG,JSON.stringify({program,args})+'\\n');
 const state=JSON.parse(fs.readFileSync(process.env.SERVICE_FIXTURE,'utf8'));
 if(state.error){console.error('manager unreachable');process.exit(1)}
 if(program==='launchctl'&&args[0]==='print'){
- if(!state.registered){console.error('Could not find service "com.moremote.companion" in domain for user gui');process.exit(113)}
- console.log('gui/501/com.moremote.companion = {\\n path = '+state.path+'\\n}');
+ if(!state.registered){console.error('Could not find service "com.moremote.cli" in domain for user gui');process.exit(113)}
+ console.log('gui/501/com.moremote.cli = {\\n path = '+state.path+'\\n}');
 }else if(program==='systemctl'&&args.includes('show')){
  console.log('LoadState='+(state.registered?'loaded':'not-found')+'\\nActiveState='+(state.active?'active':'inactive')+'\\nFragmentPath='+(state.registered?state.path:''));
 }else if(program==='powershell.exe'){
@@ -38,7 +38,7 @@ if(program==='launchctl'&&args[0]==='print'){
 }
 `;
  for(const program of ['launchctl','systemctl','powershell.exe','schtasks']){const file=join(bin,program);await writeFile(file,script);await chmod(file,0o700)}
- const entry=join(dir,'companion.js');await writeFile(entry,'console.log("synthetic companion");\n');
+ const entry=join(dir,'moremote-cli.js');await writeFile(entry,'console.log("synthetic CLI");\n');
  async function select(platform:string,registered=false,options:{error?:boolean;path?:string;content?:string}={}){
   const def=serviceDefinition(platform,home,process.execPath,entry,data);
   await writeFile(state,JSON.stringify({registered,active:registered,path:options.path??def.path,content:options.content??def.content,error:options.error??false}));
@@ -80,7 +80,7 @@ test('confirmed absence differs from unavailable manager and native lifecycle us
   await stopService(def);await removeService(def);await assert.rejects(lstat(def.path),{code:'ENOENT'});
  }
  const calls=await f.commands();assert.ok(calls.some(c=>c.program==='launchctl'&&c.args[0]==='bootstrap'));
- assert.ok(calls.some(c=>c.program==='systemctl'&&JSON.stringify(c.args)===JSON.stringify(['--user','enable','--now','moremote-companion.service'])));
+ assert.ok(calls.some(c=>c.program==='systemctl'&&JSON.stringify(c.args)===JSON.stringify(['--user','enable','--now','moremote-cli.service'])));
  assert.ok(calls.some(c=>c.program==='schtasks'&&c.args.includes('/XML')&&c.args.includes('/Create')));
  }finally{await f.close()}
 });
@@ -121,7 +121,7 @@ test('service installation rejects existing and dangling symlinks without extern
 test('managed updates preserve selected bytes and path across failure and a new verified version',async()=>{
  const f=await fixture();try{
  const npm=join(f.dir,'npm-cli.js');process.env.npm_execpath=npm;
- await writeFile(npm,`const fs=require('node:fs'),path=require('node:path');const args=process.argv.slice(2),prefix=args[args.indexOf('--prefix')+1],version=args.at(-1).split('@').at(-1),root=path.join(prefix,'node_modules','moremote-companion');fs.mkdirSync(path.join(root,'bin'),{recursive:true});fs.mkdirSync(path.join(root,'dist'));fs.writeFileSync(path.join(root,'package.json'),JSON.stringify({name:'moremote-companion',version:version==='2.0.0'?'0.0.0':version}));fs.writeFileSync(path.join(root,'bin','moremote-companion.js'),'installed '+version);fs.writeFileSync(path.join(root,'dist','cli.js'),'build '+version);if(version==='3.0.0')process.exit(1);`);
+ await writeFile(npm,`const fs=require('node:fs'),path=require('node:path');const args=process.argv.slice(2),prefix=args[args.indexOf('--prefix')+1],version=args.at(-1).split('@').at(-1),root=path.join(prefix,'node_modules','moremote-cli');fs.mkdirSync(path.join(root,'bin'),{recursive:true});fs.mkdirSync(path.join(root,'dist'));fs.writeFileSync(path.join(root,'package.json'),JSON.stringify({name:'moremote-cli',version:version==='2.0.0'?'0.0.0':version}));fs.writeFileSync(path.join(root,'bin','moremote-cli.js'),'installed '+version);fs.writeFileSync(path.join(root,'dist','cli.js'),'build '+version);if(version==='3.0.0')process.exit(1);`);
  const first=await updatePackage(f.data,'1.0.0');assert.equal(first,await managedEntry(f.data,'1.0.0'));
  const original=await readFile(first);const definition=serviceDefinition('darwin',f.home,process.execPath,first,f.data);await writeDefinition(definition);const registration=await readFile(definition.path);
  const installedFiles=[join(dirname(dirname(first)),'package.json'),join(dirname(dirname(first)),'dist','cli.js')];

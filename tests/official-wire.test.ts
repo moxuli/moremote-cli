@@ -78,7 +78,7 @@ for(const ownedSubscriptions of [false,true])test(`real SDK wire (${ownedSubscri
    }catch(error){fixtureFailure.reject(error);socket.terminate();}
   });
  });
- const config={version:1 as const,clientId:'moremote-companion-wire-test',target:'tcp://127.0.0.1:'+address.port+'?password=synthetic-wire',paseoHome:dir,allowLoopbackHttp:true,cloudEnabled:false,pairs:[]};
+ const config={version:1 as const,clientId:'moremote-cli-wire-test',target:'tcp://127.0.0.1:'+address.port+'?password=synthetic-wire',paseoHome:dir,allowLoopbackHttp:true,cloudEnabled:false,pairs:[]};
  const makeClient=()=>{const client=new OfficialClient(config);clients.add(client);return client;};
  const makeJournal=()=>{const journal=new OperationJournal(join(dir,'journal.sqlite'));journals.add(journal);return journal;};
  let official=makeClient(),journal=makeJournal();

@@ -1,9 +1,9 @@
 import {randomUUID,createHash} from 'node:crypto';
 import {join} from 'node:path';
 import {setTimeout as sleep} from 'node:timers/promises';
-import {loadConfig,saveConfig,privateDirectory,pruneRetiredPairs,type Pair} from './config.js';
+import {loadConfig,saveConfig,privateDirectory,pruneRetiredPairs,type Pair,type Config} from './config.js';
 import {OfficialClient,type Attention} from './official-client.js';
-import {CloudClient,CloudError} from './cloud-client.js';
+import {CloudClient,CloudError,type CloudRetryState} from './cloud-client.js';
 import {sealEnvelope,decode,presenceTopic,type Envelope} from './crypto.js';
 import {OperationJournal,type Occurrence} from './journal.js';
 import {executeOperation,reconcileJournal} from './operations.js';
@@ -12,7 +12,7 @@ import {processControl,retransmitControls} from './controls.js';
 import {occurrenceBinding} from './bindings.js';
 import {projectSnapshot} from './projection.js';
 import {ownRuntime} from './control.js';
-import {LIMITS} from './limits.js';
+import {LIMITS,object} from './limits.js';
 function stableId(value:unknown){const h=createHash('sha256').update(JSON.stringify(value)).digest('hex').slice(0,32);return h.slice(0,8)+'-'+h.slice(8,12)+'-'+h.slice(12,16)+'-'+h.slice(16,20)+'-'+h.slice(20)}
 export async function queueAttention(journal:OperationJournal,pair:Pair,event:Attention&{sourceFingerprint?:string;occurrence?:Occurrence},now=Date.now()){
  if(event.timestamp+LIMITS.snapshotMs<=now||event.timestamp>now+LIMITS.futureMs)return;
@@ -23,43 +23,77 @@ export async function queueAttention(journal:OperationJournal,pair:Pair,event:At
 }
 async function boundAttention(journal:OperationJournal,pair:Pair,event:Attention,official:OfficialClient){if(!event.requestId)return event;const occurrence=journal.currentOccurrence(official.requestContext().serverId,event.agentId,event.requestId);if(!occurrence||occurrence.generation!==official.generation)return null;const requestBinding=await occurrenceBinding(pair,occurrence);if(!journal.isCurrent(occurrence))return null;return {...event,occurrence,sourceFingerprint:occurrence.fingerprint,requestBinding}}
 async function publishResolutions(journal:OperationJournal,pair:Pair,cloud:CloudClient){for(const event of journal.attentionResolutions(pair.pairId)){try{await cloud.resolveAttention(event.id,event.resolvedAt)}catch(error){if(!(error instanceof CloudError&&error.status===404))throw error}journal.attentionResolutionSent(pair.pairId,event.id)}}
+// Relay disappearance/retirement fences execution, but is not an authenticated
+// endpoint revoke. Never manufacture a control receipt or reset its audit clock.
+async function observeRelayRetirement(config:Config,dir:string,pair:Pair,cloud:CloudClient,error:unknown){
+ if(pair.relayRetiredAt!==undefined)return true;
+ if(!(error instanceof CloudError)||![404,409].includes(error.status))return false;
+ let retired=false;try{const state=object((await cloud.pair()).pair).state;retired=state==='revoked'||state==='expired'}catch(probe){if(probe instanceof CloudError&&probe.status===404)retired=true}
+ if(!retired)return false;pair.active=false;pair.relayRetiredAt=Date.now();await saveConfig(dir,config);return true;
+}
+// An elapsed deadline still fences the cycle that observed it.
+function retryPaused(error:unknown){return error instanceof CloudError&&error.retryAt!==undefined}
 export async function runRuntime(dir:string){
  await privateDirectory(dir);let stopped=false;let official:OfficialClient|undefined;let stage='starting';let lastError:string|null=null;let activePairs=0;
  const controller=new AbortController();const stop=()=>{stopped=true;controller.abort();void official?.sdk.close().catch(()=>{})};const release=await ownRuntime(dir,()=>({stage,lastError,activePairs}),stop);const journal=new OperationJournal(join(dir,'journal.sqlite'));
- const attentionQueue:Attention[]=[];let detach:(()=>void)|undefined;let backoff:number=LIMITS.pollMs;let measuredAt=0;let snapshot:Awaited<ReturnType<OfficialClient['snapshot']>>|undefined;const stateEnvelopes=new Map<string,Envelope>();
+ const attentionQueue:Attention[]=[];let detach:(()=>void)|undefined;let backoff:number=LIMITS.pollMs;let measuredAt=0;let snapshot:Awaited<ReturnType<OfficialClient['snapshot']>>|undefined;
+ const statePublications=new Map<string,{envelope:Envelope;acknowledged:boolean}>();
+ const retryStates=new Map<string,CloudRetryState>();const pollOrigins=new Set<string>();
  process.once('SIGINT',stop);process.once('SIGTERM',stop);
  try{while(!stopped){try{
- journal.cleanup(Date.now());const config=await loadConfig(dir);let failure:unknown=null;const clouds=new Map<string,CloudClient>();
+ const now=Date.now();journal.cleanup(now);const config=await loadConfig(dir);pollOrigins.clear();let failure:unknown=null;let acquisitionFailed=false;const clouds=new Map<string,CloudClient>();const cycleFences=new Map<string,CloudRetryState>();
+ for(const pair of config.pairs){const revokedAt=journal.revocationTime(pair.pairId);if(revokedAt!==undefined&&pair.revokedAt===undefined){pair.active=false;pair.revokedAt=revokedAt;await saveConfig(dir,config)}if(pair.relayRetiredAt!==undefined)pair.active=false}
+ // Prune before any request: a retained 404 must not extend automatic recovery.
+ if(pruneRetiredPairs(config,now,journal))await saveConfig(dir,config);journal.cleanupRevocations(config.pairs.map(p=>p.pairId),now);
+ for(const pairId of statePublications.keys())if(!config.pairs.some(pair=>pair.pairId===pairId))statePublications.delete(pairId);
+ for(const origin of retryStates.keys())if(!config.pairs.some(pair=>(pair.apiOrigin||config.apiOrigin)===origin))retryStates.delete(origin);
  // Endpoint revocation must work even when the official daemon is offline.
- if(config.cloudEnabled)for(const pair of config.pairs){if(stopped)break;const revokedAt=journal.revocationTime(pair.pairId);if(revokedAt!==undefined&&pair.revokedAt===undefined){pair.active=false;pair.revokedAt=revokedAt;await saveConfig(dir,config)}const origin=pair.apiOrigin||config.apiOrigin;if(!origin||(!pair.active&&pair.revokedAt===undefined&&pair.expiresAt!==undefined&&pair.expiresAt<=Date.now()))continue;const cloud=new CloudClient(origin,pair.pairId,pair.hostToken,config.allowLoopbackHttp,fetch,controller.signal);try{
- for(const envelope of await cloud.controls()){const state=await processControl({pair,journal,cloud},envelope);if(state==='revoked'){pair.active=false;pair.revokedAt??=journal.revocationTime(pair.pairId)??Date.now();await saveConfig(dir,config)}}
- await retransmitControls({pair,journal,cloud});
- clouds.set(pair.pairId,cloud);
+ if(config.cloudEnabled)for(const pair of config.pairs){if(stopped)break;const origin=pair.apiOrigin||config.apiOrigin;if(!origin||(!pair.active&&pair.revokedAt===undefined&&pair.relayRetiredAt===undefined&&pair.expiresAt!==undefined&&pair.expiresAt<=Date.now()))continue;
+ pollOrigins.add(origin);let retryState=retryStates.get(origin);if(!retryState){retryState={};retryStates.set(origin,retryState)}
+ let cycleFence=cycleFences.get(origin);if(!cycleFence){cycleFence={};cycleFences.set(origin,cycleFence)}
+ const cloud=new CloudClient(origin,pair.pairId,pair.hostToken,config.allowLoopbackHttp,fetch,controller.signal,retryState,cycleFence);let controlsVerified=true;
+ try{for(const envelope of await cloud.controls()){try{const state=await processControl({pair,journal,cloud},envelope);if(state==='revoked'){pair.active=false;pair.revokedAt??=journal.revocationTime(pair.pairId)??Date.now();await saveConfig(dir,config)}}catch(error){failure=error;controlsVerified=false;if(!retryPaused(error))acquisitionFailed=true}}}
+ catch(error){failure=error;if(!await observeRelayRetirement(config,dir,pair,cloud,error)){if(!retryPaused(error))acquisitionFailed=true;continue}}
+ if(controlsVerified||journal.pairRevoked(pair.pairId)||pair.relayRetiredAt!==undefined)clouds.set(pair.pairId,cloud);
+ try{await retransmitControls({pair,journal,cloud})}catch(error){failure=error}
  for(const record of journal.receipts(pair.pairId,Date.now())){try{await cloud.receipt(record.id,{state:record.state as 'accepted'|'resolved'|'rejected'|'unknown',revision:record.revision,envelope:record.receipt!});journal.receiptSent(pair.pairId,record.id,record.revision)}catch(error){failure=error}}
- try{await publishResolutions(journal,pair,cloud)}catch(error){failure=error}
- }catch(error){failure=error}}
- const cleanupAt=Date.now();if(pruneRetiredPairs(config,cleanupAt,journal))await saveConfig(dir,config);journal.cleanupRevocations(config.pairs.map(p=>p.pairId),cleanupAt);
+ if(pair.active&&!journal.pairRevoked(pair.pairId))try{await publishResolutions(journal,pair,cloud)}catch(error){failure=error}
+ }
  if(stopped)break;
  if(!official||!official.sdk.isConnected){detach?.();await official?.close().catch(()=>{});stage='connecting';official=new OfficialClient(config,journal);await official.connect();const serverId=official.info()!.serverId;if(!config.daemonServerId){config.daemonServerId=serverId;await saveConfig(dir,config)}detach=official.onAttention(event=>{if(attentionQueue.length<500)attentionQueue.push(event);else lastError='ATTENTION_QUEUE_LIMIT'});measuredAt=0;}
- if(snapshot===undefined||Date.now()-measuredAt>=30000){snapshot=await official.snapshot();measuredAt=snapshot.measuredAt;stateEnvelopes.clear()}
- stage=config.cloudEnabled?'cloud-enabled':'local-only';activePairs=config.pairs.filter(p=>p.active&&!journal.pairRevoked(p.pairId)).length;const events=attentionQueue.splice(0);
+ if(snapshot===undefined||Date.now()-measuredAt>=30000){snapshot=await official.snapshot();measuredAt=snapshot.measuredAt}
+ stage=config.cloudEnabled?'cloud-enabled':'local-only';activePairs=config.pairs.filter(p=>p.active&&p.relayRetiredAt===undefined&&!journal.pairRevoked(p.pairId)).length;const events=attentionQueue.splice(0);
  // Persist every active phone's events before the first network send.
- if(config.cloudEnabled)for(const pair of config.pairs.filter(p=>p.active&&!journal.pairRevoked(p.pairId)))for(const event of events){const bound=await boundAttention(journal,pair,event,official);if(bound)await queueAttention(journal,pair,bound)}
- for(const pair of config.pairs){if(stopped)break;const cloud=clouds.get(pair.pairId);if(!cloud)continue;try{
- if(pair.daemonServerId&&pair.daemonServerId!==official.info()!.serverId){if(journal.pairRevoked(pair.pairId))continue;throw Error('PAIR_DAEMON_MISMATCH')}
+ if(config.cloudEnabled)for(const pair of config.pairs.filter(p=>p.active&&p.relayRetiredAt===undefined&&!journal.pairRevoked(p.pairId)))for(const event of events){const bound=await boundAttention(journal,pair,event,official);if(bound)await queueAttention(journal,pair,bound)}
+ for(const pair of config.pairs){if(stopped)break;const cloud=clouds.get(pair.pairId);if(!cloud||cycleFences.get(cloud.origin)?.error)continue;try{
+ if(pair.daemonServerId&&pair.daemonServerId!==official.info()!.serverId){if(journal.pairRevoked(pair.pairId)||pair.relayRetiredAt!==undefined)continue;throw Error('PAIR_DAEMON_MISMATCH')}
  // Read-only reconciliation remains available after revoke and original message expiry.
  if(await reconcileJournal({pair,journal,official,cloud,clock:Date.now}))failure=Error('RECEIPT_RECONCILIATION_FAILED');
- if(journal.pairRevoked(pair.pairId))continue;
+ if(journal.pairRevoked(pair.pairId)||pair.relayRetiredAt!==undefined)continue;
  const active=await activatePending(config,dir,pair,cloud,official.info()!.serverId,snapshot.hostName);if(!active)continue;
- await publishResolutions(journal,pair,cloud);
- let state=stateEnvelopes.get(pair.pairId);if(!state){const payload=await projectSnapshot(snapshot,pair,journal,official.generation);state=await sealEnvelope(decode(pair.rootKey,32),{version:1,pairId:pair.pairId,id:randomUUID(),channel:'state',issuedAt:snapshot.measuredAt,expiresAt:snapshot.measuredAt+LIMITS.snapshotMs},payload);stateEnvelopes.set(pair.pairId,state)}await cloud.state(state);
- for(const event of events){const bound=await boundAttention(journal,pair,event,official);if(bound)await queueAttention(journal,pair,bound)}
- await publishResolutions(journal,pair,cloud);
- for(const item of journal.attention(pair.pairId,Date.now())){await cloud.attention(item.body);journal.attentionSent(pair.pairId,item.id)}
- for(const envelope of await cloud.commands())if(!stopped){try{await executeOperation({pair,journal,official,cloud,clock:Date.now},envelope)}catch(error){failure=error}}
- }catch(error){failure=error}}
- if(failure)throw failure;lastError=null;backoff=LIMITS.pollMs;
- }catch(error){lastError=error instanceof CloudError?error.code:'COMPANION_CYCLE_FAILED';stage='degraded';backoff=Math.min(backoff*2,LIMITS.maxBackoffMs)}
+ try{
+ let publication=statePublications.get(pair.pairId);
+ // A lost acknowledgement keeps the exact immutable envelope even across a
+ // newer measurement. Expired display-only state can yield to a fresh sample.
+ if(!publication||publication.envelope.expiresAt<=Date.now()||(publication.acknowledged&&publication.envelope.issuedAt!==snapshot.measuredAt)){
+ const payload=await projectSnapshot(snapshot,pair,journal,official.generation);const envelope=await sealEnvelope(decode(pair.rootKey,32),{version:1,pairId:pair.pairId,id:randomUUID(),channel:'state',issuedAt:snapshot.measuredAt,expiresAt:snapshot.measuredAt+LIMITS.snapshotMs},payload);publication={envelope,acknowledged:false};statePublications.set(pair.pairId,publication)}
+ if(!publication.acknowledged){await cloud.state(publication.envelope);publication.acknowledged=true}
+ }catch(error){failure=error;if(await observeRelayRetirement(config,dir,pair,cloud,error))continue}
+ try{await publishResolutions(journal,pair,cloud)}catch(error){failure=error}
+ for(const item of journal.attention(pair.pairId,Date.now())){try{await cloud.attention(item.body);journal.attentionSent(pair.pairId,item.id)}catch(error){failure=error}}
+ // Publication failures are independent from acquisition. Preserve the normal
+ // three-second command/control cadence while still surfacing degraded status.
+ try{for(const envelope of await cloud.commands()){if(stopped||cycleFences.get(cloud.origin)?.error)break;try{await executeOperation({pair,journal,official,cloud,clock:Date.now},envelope)}catch(error){failure=error}}}
+ catch(error){failure=error;if(!await observeRelayRetirement(config,dir,pair,cloud,error)&&!retryPaused(error))acquisitionFailed=true}
+ }catch(error){failure=error;if(!await observeRelayRetirement(config,dir,pair,cloud,error)&&!retryPaused(error))acquisitionFailed=true}}
+ if(failure){lastError=failure instanceof CloudError?failure.code:'CLI_CYCLE_FAILED';stage='degraded';backoff=acquisitionFailed?Math.min(backoff*2,LIMITS.maxBackoffMs):LIMITS.pollMs}else{lastError=null;backoff=LIMITS.pollMs}
+ }catch(error){lastError=error instanceof CloudError?error.code:'CLI_CYCLE_FAILED';stage='degraded';backoff=retryPaused(error)?LIMITS.pollMs:Math.min(backoff*2,LIMITS.maxBackoffMs)}
+ // Pauses are shared only by relay origin, never reset by a cached rejection.
+ // Other relays retain ordinary control priority/cadence. If all are paused,
+ // sleep to the first original deadline; stop still interrupts this wait.
+ const wakeNow=Date.now();let retryWake=Infinity;
+ for(const origin of pollOrigins){const retryAt=retryStates.get(origin)?.error?.retryAt;if(retryAt===undefined||retryAt<=wakeNow){retryWake=wakeNow;break}retryWake=Math.min(retryWake,retryAt)}
+ if(Number.isFinite(retryWake)&&retryWake>wakeNow)backoff=Math.max(backoff,retryWake-wakeNow);
  await sleep(backoff,undefined,{signal:controller.signal}).catch(()=>{});
  }}finally{process.removeListener('SIGINT',stop);process.removeListener('SIGTERM',stop);detach?.();await official?.close().catch(()=>{});journal.close();await release()}
 }

@@ -5,7 +5,7 @@ import { DatabaseSync } from 'node:sqlite';
 import { createHash, randomUUID } from 'node:crypto';
 
 export const JOURNAL_APPLICATION_ID=0x4d524331;
-export const RUNTIME_OWNER='MoRemote Companion runtime';
+export const RUNTIME_OWNER='MoRemote CLI runtime';
 export interface ResourceIdentity {dev:number;ino:number}
 export interface RuntimeOwner {
  owner:typeof RUNTIME_OWNER;version:1;instanceId:string;pid:number;startedAt:number;token:string;
@@ -44,7 +44,7 @@ export function readPrivateText(path:string,limit:number,encoding:'utf8'|'utf16l
 }
 export function assertStateRoot(dir:string) {
  inspectResource(dir,'directory');
- if(readPrivateText(join(dir,'.moremote-companion-owner'),128).text!=='MoRemote Companion state v1\n')throw Error('FOREIGN_DATA_DIRECTORY');
+ if(readPrivateText(join(dir,'.moremote-cli-owner'),128).text!=='MoRemote CLI state v1\n')throw Error('FOREIGN_DATA_DIRECTORY');
 }
 function object(value:unknown):value is Record<string,unknown> {return typeof value==='object'&&value!==null&&!Array.isArray(value);}
 function integer(value:unknown,min:number,max=Number.MAX_SAFE_INTEGER):value is number {return typeof value==='number'&&Number.isSafeInteger(value)&&value>=min&&value<=max;}
@@ -157,19 +157,19 @@ export function writePrivateAtomic(path:string,value:unknown):ResourceIdentity {
 }
 export function assertTaskResource(dir:string,platform=process.platform) {
  if(platform!=='win32')throw Error('FOREIGN_TASK_RESOURCE');
- const text=readPrivateText(join(dir,'moremote-companion-task.xml'),131072,'utf16le').text;
- const marker='Managed by moremote-companion; per-user ownership v1; owner='+createHash('sha256').update(dir).digest('hex');
+ const text=readPrivateText(join(dir,'moremote-cli-task.xml'),131072,'utf16le').text;
+ const marker='Managed by moremote-cli; per-user ownership v1; owner='+createHash('sha256').update(dir).digest('hex');
  if(!text.startsWith('<?xml version="1.0" encoding="UTF-16"?>')||!text.includes('<Task version="1.2" xmlns="http://schemas.microsoft.com/windows/2004/02/mit/task">')||!text.includes('<Description>'+marker+'</Description>')||!text.trimEnd().endsWith('</Task>'))throw Error('FOREIGN_TASK_RESOURCE');
 }
 export function assertStateResource(dir:string,name:string) {
  const path=join(dir,name);
- if(name==='.moremote-companion-owner') {assertStateRoot(dir);return;}
+ if(name==='.moremote-cli-owner') {assertStateRoot(dir);return;}
  if(name==='journal.sqlite') {validateJournalPath(path);return;}
  if(/^journal\.sqlite-(wal|shm|journal)$/.test(name)) {validateJournalPath(join(dir,'journal.sqlite'));return;}
  if(name==='runtime.lock'||name==='runtime.json'||name==='runtime.sock') {inspectRuntime(dir);return;}
  if(name==='managed') {
   inspectResource(path,'directory');
-  if(readPrivateText(join(path,'.moremote-companion-managed-owner'),128).text!=='MoRemote Companion managed package v1\n')throw Error('FOREIGN_MANAGED_DIRECTORY');return;
+  if(readPrivateText(join(path,'.moremote-cli-managed-owner'),128).text!=='MoRemote CLI managed package v1\n')throw Error('FOREIGN_MANAGED_DIRECTORY');return;
  }
  if(/^s\.[0-9a-f]{8}$/.test(name)) {
   const runtime=inspectRuntime(dir);
@@ -177,10 +177,10 @@ export function assertStateResource(dir:string,name:string) {
  }
  if(name==='config.json'||/^config\.json\.[0-9a-f-]{36}\.tmp$/.test(name)) {
   const value:unknown=JSON.parse(readPrivateText(path,131072).text);
-  if(!object(value)||value.version!==1||typeof value.clientId!=='string'||!value.clientId.startsWith('moremote-companion-')||value.clientId.length>256)throw Error('FOREIGN_CONFIG');return;
+  if(!object(value)||value.version!==1||typeof value.clientId!=='string'||!value.clientId.startsWith('moremote-cli-')||value.clientId.length>256)throw Error('FOREIGN_CONFIG');return;
  }
  if(/^runtime\.json\.[0-9a-f-]{36}\.tmp$/.test(name)) {readRuntimeRecord(path);return;}
  if(/^runtime\.lock\.[0-9a-f-]{36}\.tmp$/.test(name)) {readRuntimeOwner(path);return;}
- if(name==='moremote-companion-task.xml') {assertTaskResource(dir);return;}
+ if(name==='moremote-cli-task.xml') {assertTaskResource(dir);return;}
  throw Error('FOREIGN_DATA_DIRECTORY');
 }

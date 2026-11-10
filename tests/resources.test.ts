@@ -10,7 +10,7 @@ import { assertOwnedDirectory } from '../src/config.ts';
 
 async function fixture() {
  const dir=await mkdtemp(join(tmpdir(),'mrc-resource-'));
- await writeFile(join(dir,'.moremote-companion-owner'),'MoRemote Companion state v1\n',{mode:0o600});
+ await writeFile(join(dir,'.moremote-cli-owner'),'MoRemote CLI state v1\n',{mode:0o600});
  return dir;
 }
 
@@ -53,14 +53,14 @@ test('root markers, resource kinds and private modes are enforced without chmod'
  try {
   await assertStateRoot(dir);await writeFile(path,'{}',{mode:0o644});
   assert.throws(()=>assertStateResource(dir,'config.json'),process.platform==='win32'?/FOREIGN_CONFIG/:/RESOURCE/);if(process.platform!=='win32')assert.equal((await stat(path)).mode&0o777,0o644);
-  await rm(path);await symlink(join(dir,'.moremote-companion-owner'),path);assert.throws(()=>assertStateResource(dir,'config.json'),/RESOURCE/);
-  await rm(join(dir,'.moremote-companion-owner'));await symlink(path,join(dir,'.moremote-companion-owner'));assert.throws(()=>assertStateRoot(dir),/RESOURCE/);
+  await rm(path);await symlink(join(dir,'.moremote-cli-owner'),path);assert.throws(()=>assertStateResource(dir,'config.json'),/RESOURCE/);
+  await rm(join(dir,'.moremote-cli-owner'));await symlink(path,join(dir,'.moremote-cli-owner'));assert.throws(()=>assertStateRoot(dir),/RESOURCE/);
  } finally {await rm(dir,{recursive:true,force:true});}
 });
 
 test('atomic JSON replacement refuses linked or foreign targets and leaves external bytes/mode unchanged',async()=>{
  const dir=await fixture(),external=await mkdtemp(join(tmpdir(),'mrc-json-')),target=join(external,'synthetic.json'),path=join(dir,'config.json');
- const value={version:1,clientId:'moremote-companion-synthetic'};
+ const value={version:1,clientId:'moremote-cli-synthetic'};
  try {
   await writeFile(target,JSON.stringify(value),{mode:0o600});const before=await readFile(target),mode=(await stat(target)).mode;
   for(const make of [symlink,link]) {
@@ -85,7 +85,7 @@ test('temporary JSON names do not by themselves establish ownership',async()=>{
 });
 
 test('foreign private task XML fails root purge ownership without changing bytes or mode',async()=>{
- const dir=await fixture(),path=join(dir,'moremote-companion-task.xml');
+ const dir=await fixture(),path=join(dir,'moremote-cli-task.xml');
  try {
   await writeFile(path,'<Task>unrelated user task</Task>',{mode:0o600});
   const bytes=await readFile(path),mode=(await stat(path)).mode;
@@ -95,13 +95,13 @@ test('foreign private task XML fails root purge ownership without changing bytes
  } finally {await rm(dir,{recursive:true,force:true});}
 });
 
-test('Windows task XML requires UTF16LE exact companion marker bound to its data directory',async()=>{
- const dir=await fixture(),other=await fixture(),path=join(dir,'moremote-companion-task.xml');
+test('Windows task XML requires UTF16LE exact CLI marker bound to its data directory',async()=>{
+ const dir=await fixture(),other=await fixture(),path=join(dir,'moremote-cli-task.xml');
  try {
-  const definition=serviceDefinition('win32','/synthetic/home','C:\\synthetic\\node.exe','C:\\synthetic\\companion.js',dir);
+  const definition=serviceDefinition('win32','/synthetic/home','C:\\synthetic\\node.exe','C:\\synthetic\\moremote-cli.js',dir);
   await writeFile(path,definition.content,{encoding:'utf16le',mode:0o600});assertTaskResource(dir,'win32');
-  if(process.platform!=='win32')assert.throws(()=>assertStateResource(dir,'moremote-companion-task.xml'),/FOREIGN/);
-  const foreign=serviceDefinition('win32','/synthetic/home','C:\\synthetic\\node.exe','C:\\synthetic\\companion.js',other);
+  if(process.platform!=='win32')assert.throws(()=>assertStateResource(dir,'moremote-cli-task.xml'),/FOREIGN/);
+  const foreign=serviceDefinition('win32','/synthetic/home','C:\\synthetic\\node.exe','C:\\synthetic\\moremote-cli.js',other);
   await writeFile(path,foreign.content,'utf16le');assert.throws(()=>assertTaskResource(dir,'win32'),/FOREIGN/);
   await writeFile(path,definition.content,'utf8');assert.throws(()=>assertTaskResource(dir,'win32'),/FOREIGN/);
  } finally {await rm(dir,{recursive:true,force:true});await rm(other,{recursive:true,force:true});}

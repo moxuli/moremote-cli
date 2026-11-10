@@ -1,11 +1,11 @@
-# 01 — Companion architecture
+# 01 — MoRemote CLI architecture
 
 **Status:** owner-approved notification/scoped-delivery iteration; implementation source pending independent verification
 **Date:** 2026-11-10
 
 ## Purpose and boundaries
 
-MoRemote Companion is the optional open-source enhancement layer for MoRemote.
+MoRemote CLI (`moremote-cli`) is the optional open-source enhancement layer for MoRemote.
 It consumes official Paseo interfaces. It never patches, forks, replaces or
 silently updates Paseo. The official daemon continues owning agents, sessions,
 tools and approvals. Baseline MoRemote works without this companion.
@@ -13,6 +13,14 @@ tools and approvals. Baseline MoRemote works without this companion.
 This repository must build and run independently of the app repository, any
 private automation workspace or a developer's personal machine configuration.
 Documentation uses synthetic identifiers and credentials only.
+
+The owner approved the full identity cutover on 2026-11-10. Repository, npm
+package, executable, client/runtime ownership and managed-package identities
+move together; no legacy alias or old-state adoption is provided. Configuration
+and service names are listed in the configuration registry. Protocol role
+`companionHello`, cryptographic salt/envelope schema, APNs categories and the
+app/Keychain identities are deliberately preserved. Earlier local acceptance
+predates the rename; verification of this cutover remains pending in STATE.
 
 ## Runtime
 

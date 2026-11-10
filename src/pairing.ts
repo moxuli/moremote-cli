@@ -16,8 +16,9 @@ export async function verifyClaim(pair:Pick<Pair,'pairId'|'rootKey'|'expiresAt'>
  const envelope=object(p.proof);if(envelope.pairId!==pair.pairId||envelope.id!==p.claimId||envelope.channel!=='enrollment'||Number(envelope.issuedAt)<pair.expiresAt!-LIMITS.enrollmentMs||Number(envelope.expiresAt)>pair.expiresAt!)throw Error('CLAIM_CONTEXT_MISMATCH');const body=object(await openEnvelope(decode(pair.rootKey,32),p.proof,now));exact(body,['type','claimId','phoneTokenHash']);if(body.type!=='phoneHello'||body.claimId!==p.claimId||body.phoneTokenHash!==p.phoneTokenHash)throw Error('CLAIM_PROOF_MISMATCH');if(clock()>=pair.expiresAt!)throw Error('PAIRING_EXPIRED');return {claimId:p.claimId,phoneTokenHash:p.phoneTokenHash};
 }
 export async function activatePending(config:Config,dir:string,pair:Pair,cloud:CloudClient,daemonServerId:string,hostName=hostname()){
- const result=await cloud.pair();const state=object(result.pair);if(state.state==='revoked')return false;
- if(pair.active)return state.state==='active';if(!Number.isSafeInteger(pair.expiresAt)||Date.now()>=pair.expiresAt!)throw Error('PAIRING_EXPIRED');if(!state.pendingClaim)return false;
+ if(pair.revokedAt!==undefined||pair.relayRetiredAt!==undefined)return false;if(pair.active)return true;
+ const result=await cloud.pair();const state=object(result.pair);if(state.state==='revoked'||state.state==='expired'){pair.active=false;pair.relayRetiredAt??=Date.now();await saveConfig(dir,config);return false}
+ if(!Number.isSafeInteger(pair.expiresAt)||Date.now()>=pair.expiresAt!)throw Error('PAIRING_EXPIRED');if(!state.pendingClaim)return false;
  const accepted=await verifyClaim(pair,state.pendingClaim);if(pair.claimId&&(pair.claimId!==accepted.claimId||pair.phoneTokenHash!==accepted.phoneTokenHash))throw Error('CLAIM_REPLACEMENT_REFUSED');
  pair.claimId=accepted.claimId;pair.phoneTokenHash=accepted.phoneTokenHash;pair.daemonServerId=daemonServerId;
  if(!pair.activationProof){const now=Date.now();pair.activationProof=await sealEnvelope(decode(pair.rootKey,32),{version:1,pairId:pair.pairId,id:accepted.claimId,channel:'activation',issuedAt:now,expiresAt:Math.min(pair.expiresAt||now+LIMITS.enrollmentMs,now+LIMITS.enrollmentMs)},{type:'companionHello',...accepted,daemonServerId,hostName:hostName.slice(0,256)})}

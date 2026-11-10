@@ -93,3 +93,26 @@ are separate app delivery units, not unfinished companion implementations.
 - Scoped independent reviews are closed. Local implementation/acceptance is
   complete; service installation, public publication and production/Apple/device
   activation remain separate operator gates. Exact run chronology is in STATE.
+
+## Subsequent owner-approved CLI identity cutover — 2026-11-10
+
+Canonical product: **MoRemote CLI**; repository/npm/command: `moremote-cli`;
+entry: `bin/moremote-cli.js`; state override: `MOREMOTE_CLI_HOME`.
+macOS/Windows state is `MoRemoteCLI`; Linux state is `moremote-cli`. Services
+are `com.moremote.cli`, `moremote-cli.service` and Windows logon task `MoRemoteCLI`.
+CLI-owned runtime/client/managed-package identities move together. There is no
+released package or installed service to migrate; use no compatibility alias or
+automatic old-state adoption. Preserve foreign-resource protections, protocol
+role `companionHello`, crypto salt/schema, APNs categories and app/Keychain IDs.
+
+The implementation and root move are in progress; integration-owner fresh
+checks, compiled command/isolated-state smoke and independent reviews are
+pending. The verification journal above records the former
+`moremote-companion` identity, not renamed-tree acceptance. Keep this plan filename
+stable and use current commands from README/STATE for reproduction.
+
+Proceeding toward cloud/Apple activation is also owner-approved, with exact
+resource/key/permission/billing mutations requiring point-of-risk interactive
+confirmation. No deployment, Apple activation, physical delivery, public
+publication or everyday-host service installation is claimed by this update.
+

@@ -12,7 +12,7 @@ import { assertOwnedDirectory } from '../src/config.ts';
 
 async function fixture() {
  const dir=await mkdtemp(join(tmpdir(),'mrc-ipc-'));
- await writeFile(join(dir,'.moremote-companion-owner'),'MoRemote Companion state v1\n',{mode:0o600});
+ await writeFile(join(dir,'.moremote-cli-owner'),'MoRemote CLI state v1\n',{mode:0o600});
  return dir;
 }
 async function absent(path:string) {await assert.rejects(lstat(path),{code:'ENOENT'});}
@@ -42,7 +42,7 @@ test('unrelated live UNIX socket is not unlinked or adopted without an owned rec
  } finally {const closed=Promise.withResolvers<void>();server.close(()=>closed.resolve());await closed.promise;await rm(dir,{recursive:true,force:true});}
 });
 test('unmarked or oversized runtime records cannot mutate lock or endpoint',async()=>{
- for(const content of [JSON.stringify({pid:process.pid}),JSON.stringify({owner:'MoRemote Companion runtime',version:1,pid:process.pid,token:'x'.repeat(5000)})]) {
+ for(const content of [JSON.stringify({pid:process.pid}),JSON.stringify({owner:'MoRemote CLI runtime',version:1,pid:process.pid,token:'x'.repeat(5000)})]) {
   const dir=await fixture();
   try {
    const path=join(dir,'runtime.lock');await writeFile(path,content,{mode:0o600});const before=await readFile(path);
@@ -108,7 +108,7 @@ test('socket staging fits when the public endpoint is near the UNIX path limit',
   const padding=100-Buffer.byteLength(join(base,'runtime.sock'))-1;
   if(padding<1) {t.skip('temporary base path already exceeds the portable UNIX endpoint bound');return;}
   const dir=join(base,'x'.repeat(padding));await mkdir(dir,{mode:0o700});
-  await writeFile(join(dir,'.moremote-companion-owner'),'MoRemote Companion state v1\n',{mode:0o600});
+  await writeFile(join(dir,'.moremote-cli-owner'),'MoRemote CLI state v1\n',{mode:0o600});
   assert.equal(Buffer.byteLength(controlEndpoint(dir)),100);
   dispose=await ownRuntime(dir,()=>({running:true}),()=>{});
   assert.deepEqual(await requestControl(dir,'status'),{ok:true,running:true});
@@ -133,7 +133,7 @@ test('cleanup refuses a foreign replacement at libuv staging pathname before clo
 test('read-only control discovery accepts an empty private directory but not an unmarked collision',async()=>{
  const dir=await mkdtemp(join(tmpdir(),'mrc-empty-'));
  try {
-  assert.equal(await requestControl(dir,'status'),null);await absent(join(dir,'.moremote-companion-owner'));
+  assert.equal(await requestControl(dir,'status'),null);await absent(join(dir,'.moremote-cli-owner'));
   await writeFile(join(dir,'unrelated'),'foreign private file',{mode:0o600});
   await assert.rejects(requestControl(dir,'status'));
   assert.equal(await readFile(join(dir,'unrelated'),'utf8'),'foreign private file');

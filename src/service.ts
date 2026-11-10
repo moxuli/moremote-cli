@@ -5,16 +5,16 @@ import { homedir,userInfo } from 'node:os';
 import { constants } from 'node:fs';
 import { mkdir,readFile,unlink,access,lstat,open,rename,link,mkdtemp,rm } from 'node:fs/promises';
 import {privateManagedDirectory} from './config.js';
-const taskName='\\MoRemoteCompanion';
+const taskName='\\MoRemoteCLI';
 function xml(s:string){return s.replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('>','&gt;').replaceAll('"','&quot;').replaceAll("'",'&apos;')}
 function systemd(s:string){if(/[\r\n\0]/.test(s))throw Error('INVALID_SERVICE_PATH');return '"'+s.replaceAll('\\','\\\\').replaceAll('"','\\"').replaceAll('%','%%').replaceAll('$',()=> '$$')+'"'}
 function windowsArg(s:string){return '"'+s.replace(/(\\*)"/g,'$1$1\\"').replace(/(\\+)$/,'$1$1')+'"'}
 export interface ServiceDefinition{path:string;content:string;platform:string;entry:string}
 export function serviceDefinition(platform:string,home:string,node:string,entry:string,data:string):ServiceDefinition{
- const marker='Managed by moremote-companion; per-user ownership v1; owner='+createHash('sha256').update(data).digest('hex');
- if(platform==='darwin')return {platform,entry,path:join(home,'Library','LaunchAgents','com.moremote.companion.plist'),content:'<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd"><plist version="1.0"><dict><key>Label</key><string>com.moremote.companion</string><key>Description</key><string>'+marker+'</string><key>ProgramArguments</key><array>'+[node,entry,'run','--data-dir',data].map(s=>'<string>'+xml(s)+'</string>').join('')+'</array><key>RunAtLoad</key><true/><key>KeepAlive</key><true/><key>ProcessType</key><string>Background</string></dict></plist>\n'};
- if(platform==='linux')return {platform,entry,path:join(process.env.XDG_CONFIG_HOME||join(home,'.config'),'systemd','user','moremote-companion.service'),content:'[Unit]\nDescription='+marker+'\n[Service]\nExecStart='+[node,entry,'run','--data-dir',data].map(systemd).join(' ')+'\nRestart=on-failure\nRestartSec=5\n[Install]\nWantedBy=default.target\n'};
- if(platform==='win32')return {platform,entry,path:join(data,'moremote-companion-task.xml'),content:'<?xml version="1.0" encoding="UTF-16"?><Task version="1.2" xmlns="http://schemas.microsoft.com/windows/2004/02/mit/task"><RegistrationInfo><Description>'+marker+'</Description></RegistrationInfo><Triggers><LogonTrigger><UserId>'+xml(userInfo().username)+'</UserId><Enabled>true</Enabled></LogonTrigger></Triggers><Principals><Principal id="CurrentUser"><UserId>'+xml(userInfo().username)+'</UserId><LogonType>InteractiveToken</LogonType><RunLevel>LeastPrivilege</RunLevel></Principal></Principals><Settings><MultipleInstancesPolicy>IgnoreNew</MultipleInstancesPolicy><ExecutionTimeLimit>PT0S</ExecutionTimeLimit><Enabled>true</Enabled></Settings><Actions Context="CurrentUser"><Exec><Command>'+xml(node)+'</Command><Arguments>'+xml([entry,'run','--data-dir',data].map(windowsArg).join(' '))+'</Arguments></Exec></Actions></Task>'};
+ const marker='Managed by moremote-cli; per-user ownership v1; owner='+createHash('sha256').update(data).digest('hex');
+ if(platform==='darwin')return {platform,entry,path:join(home,'Library','LaunchAgents','com.moremote.cli.plist'),content:'<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd"><plist version="1.0"><dict><key>Label</key><string>com.moremote.cli</string><key>Description</key><string>'+marker+'</string><key>ProgramArguments</key><array>'+[node,entry,'run','--data-dir',data].map(s=>'<string>'+xml(s)+'</string>').join('')+'</array><key>RunAtLoad</key><true/><key>KeepAlive</key><true/><key>ProcessType</key><string>Background</string></dict></plist>\n'};
+ if(platform==='linux')return {platform,entry,path:join(process.env.XDG_CONFIG_HOME||join(home,'.config'),'systemd','user','moremote-cli.service'),content:'[Unit]\nDescription='+marker+'\n[Service]\nExecStart='+[node,entry,'run','--data-dir',data].map(systemd).join(' ')+'\nRestart=on-failure\nRestartSec=5\n[Install]\nWantedBy=default.target\n'};
+ if(platform==='win32')return {platform,entry,path:join(data,'moremote-cli-task.xml'),content:'<?xml version="1.0" encoding="UTF-16"?><Task version="1.2" xmlns="http://schemas.microsoft.com/windows/2004/02/mit/task"><RegistrationInfo><Description>'+marker+'</Description></RegistrationInfo><Triggers><LogonTrigger><UserId>'+xml(userInfo().username)+'</UserId><Enabled>true</Enabled></LogonTrigger></Triggers><Principals><Principal id="CurrentUser"><UserId>'+xml(userInfo().username)+'</UserId><LogonType>InteractiveToken</LogonType><RunLevel>LeastPrivilege</RunLevel></Principal></Principals><Settings><MultipleInstancesPolicy>IgnoreNew</MultipleInstancesPolicy><ExecutionTimeLimit>PT0S</ExecutionTimeLimit><Enabled>true</Enabled></Settings><Actions Context="CurrentUser"><Exec><Command>'+xml(node)+'</Command><Arguments>'+xml([entry,'run','--data-dir',data].map(windowsArg).join(' '))+'</Arguments></Exec></Actions></Task>'};
  throw Error('UNSUPPORTED_SERVICE_PLATFORM');
 }
 class CommandFailure extends Error{
@@ -33,7 +33,7 @@ export function command(program:string,args:string[],capture=true):Promise<strin
 }
 function missing(error:unknown){return error instanceof Error&&'code' in error&&error.code==='ENOENT'}
 function marker(def:ServiceDefinition){
- const value=def.content.match(/Managed by moremote-companion; per-user ownership v1; owner=[0-9a-f]{64}/)?.[0];
+ const value=def.content.match(/Managed by moremote-cli; per-user ownership v1; owner=[0-9a-f]{64}/)?.[0];
  if(!value)throw Error('INVALID_SERVICE_DEFINITION');return value;
 }
 async function ownedFile(def:ServiceDefinition){
@@ -50,7 +50,7 @@ async function ownedFile(def:ServiceDefinition){
  }finally{await handle.close()}
 }
 export interface ServiceStatus{owned:boolean;registration:'registered'|'absent'|'unknown';error?:string}
-const windowsQuery="$ErrorActionPreference='Stop'; try { $task=Get-ScheduledTask -TaskName 'MoRemoteCompanion' -TaskPath '\\' -ErrorAction Stop; Export-ScheduledTask -TaskName $task.TaskName -TaskPath $task.TaskPath } catch { if ($_.CategoryInfo.Category -eq 'ObjectNotFound') { exit 3 }; exit 1 }";
+const windowsQuery="$ErrorActionPreference='Stop'; try { $task=Get-ScheduledTask -TaskName 'MoRemoteCLI' -TaskPath '\\' -ErrorAction Stop; Export-ScheduledTask -TaskName $task.TaskName -TaskPath $task.TaskPath } catch { if ($_.CategoryInfo.Category -eq 'ObjectNotFound') { exit 3 }; exit 1 }";
 function xmlValue(content:string,element:string){
  const value=content.match(new RegExp('<'+element+'(?:\\s[^>]*)?>([\\s\\S]*?)</'+element+'>'))?.[1];
  return value?.replaceAll('&quot;','"').replaceAll('&apos;',"'").replaceAll('&lt;','<').replaceAll('&gt;','>').replaceAll('&amp;','&');
@@ -58,7 +58,7 @@ function xmlValue(content:string,element:string){
 async function registration(def:ServiceDefinition,content:string|undefined):Promise<'registered'|'absent'>{
  if(def.platform==='darwin'){
   let raw:string;
-  try{raw=await command('launchctl',['print','gui/'+process.getuid!()+'/com.moremote.companion'],true)}
+  try{raw=await command('launchctl',['print','gui/'+process.getuid!()+'/com.moremote.cli'],true)}
   catch(error){
    if(error instanceof CommandFailure&&error.status===113&&/Could not find service/.test(error.output))return 'absent';
    throw error;
@@ -66,7 +66,7 @@ async function registration(def:ServiceDefinition,content:string|undefined):Prom
   const path=raw.match(/^\s*path = (.+)\s*$/m)?.[1]?.trim();
   if(path!==def.path)throw Error('FOREIGN_SERVICE_REGISTRATION');
  }else if(def.platform==='linux'){
-  const raw=await command('systemctl',['--user','show','moremote-companion.service','--property=FragmentPath,LoadState,ActiveState'],true);
+  const raw=await command('systemctl',['--user','show','moremote-cli.service','--property=FragmentPath,LoadState,ActiveState'],true);
   const path=raw.match(/^FragmentPath=(.*)$/m)?.[1],load=raw.match(/^LoadState=(.*)$/m)?.[1];
   if(path===''&&load==='not-found')return 'absent';
   if(path!==def.path)throw Error(path?'FOREIGN_SERVICE_REGISTRATION':'SERVICE_MANAGER_INVALID_RESPONSE');
@@ -118,20 +118,20 @@ export async function installService(def:ServiceDefinition){
  if(def.platform==='darwin')await command('launchctl',['bootstrap','gui/'+process.getuid!(),def.path]);
  else if(def.platform==='linux'){
   await command('systemctl',['--user','daemon-reload']);
-  await command('systemctl',['--user','enable','--now','moremote-companion.service']);
+  await command('systemctl',['--user','enable','--now','moremote-cli.service']);
  }else await command('schtasks',['/Create','/TN',taskName,'/XML',def.path,'/F']);
 }
 export async function stopService(def:ServiceDefinition){
  const status=await serviceStatus(def);requireKnown(status);
  if(status.registration==='absent')return;
- if(def.platform==='darwin')await command('launchctl',['bootout','gui/'+process.getuid!()+'/com.moremote.companion']);
- else if(def.platform==='linux')await command('systemctl',['--user','stop','moremote-companion.service']);
+ if(def.platform==='darwin')await command('launchctl',['bootout','gui/'+process.getuid!()+'/com.moremote.cli']);
+ else if(def.platform==='linux')await command('systemctl',['--user','stop','moremote-cli.service']);
  else await command('schtasks',['/End','/TN',taskName]);
 }
 export async function removeService(def:ServiceDefinition){
  const status=await serviceStatus(def);requireKnown(status);
  if(status.registration==='registered'){
-  if(def.platform==='linux')await command('systemctl',['--user','disable','--now','moremote-companion.service']);
+  if(def.platform==='linux')await command('systemctl',['--user','disable','--now','moremote-cli.service']);
   else if(def.platform==='darwin')await stopService(def);
   else await command('schtasks',['/Delete','/TN',taskName,'/F']);
  }
@@ -152,13 +152,13 @@ async function regular(path:string){
  if(!stat.isFile()||stat.isSymbolicLink())throw Error('INVALID_MANAGED_INSTALL');
 }
 async function verifiedEntry(prefix:string,version:string){
- for(const path of [prefix,join(prefix,'node_modules'),join(prefix,'node_modules','moremote-companion')])await directory(path);
- const root=join(prefix,'node_modules','moremote-companion'),manifest=join(root,'package.json');
+ for(const path of [prefix,join(prefix,'node_modules'),join(prefix,'node_modules','moremote-cli')])await directory(path);
+ const root=join(prefix,'node_modules','moremote-cli'),manifest=join(root,'package.json');
  await regular(manifest);
  const pkg:unknown=JSON.parse(await readFile(manifest,'utf8'));
- if(typeof pkg!=='object'||pkg===null||!('name' in pkg)||pkg.name!=='moremote-companion'||!('version' in pkg)||pkg.version!==version)throw Error('UPDATE_IDENTITY_MISMATCH');
+ if(typeof pkg!=='object'||pkg===null||!('name' in pkg)||pkg.name!=='moremote-cli'||!('version' in pkg)||pkg.version!==version)throw Error('UPDATE_IDENTITY_MISMATCH');
  for(const path of [join(root,'bin'),join(root,'dist')])await directory(path);
- const entry=join(root,'bin','moremote-companion.js');
+ const entry=join(root,'bin','moremote-cli.js');
  await regular(entry);await regular(join(root,'dist','cli.js'));return entry;
 }
 export async function managedEntry(dir:string,version:string){
@@ -179,7 +179,7 @@ export async function updatePackage(dir:string,version:string){
  if(!npmCli)throw Error('NPM_CLI_NOT_FOUND');
  const staging=await mkdtemp(join(versions,'.install-'));
  try{
-  await command(process.execPath,[npmCli,'install','--prefix',staging,'--ignore-scripts','--no-audit','--no-fund','--save-exact','--registry=https://registry.npmjs.org','moremote-companion@'+version]);
+  await command(process.execPath,[npmCli,'install','--prefix',staging,'--ignore-scripts','--no-audit','--no-fund','--save-exact','--registry=https://registry.npmjs.org','moremote-cli@'+version]);
   await verifiedEntry(staging,version);
   await rename(staging,destination);
   return managedEntry(dir,version);

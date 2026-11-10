@@ -11,7 +11,7 @@ export interface PendingRequest{id:string;kind?:string;requestBinding?:string;oc
 export interface CurrentAgent{id:string;pendingPermissions?:PendingRequest[]}
 export interface OfficialOperations{current(id:string):Promise<CurrentAgent|null>;send(c:Extract<Command,{type:'send'}>):Promise<void>;permission(c:Extract<Command,{type:'permission'}>):Promise<void>;reconcile(c:Command,pair?:Pick<Pair,'pairId'|'rootKey'>):Promise<ReceiptState|null>;reconcileEvidence?(evidence:Evidence,pair:Pick<Pair,'pairId'|'rootKey'>):Promise<ReceiptState|null>;requestContext?():{serverId:string;generation:string}}
 export interface OperationCloud{dispatch(id:string):Promise<{dispatchAllowed:boolean}>;receipt(id:string,body:{state:ReceiptState;revision:number;envelope:Envelope}):Promise<unknown>}
-export interface OperationContext{pair:Pick<Pair,'pairId'|'rootKey'|'hostToken'|'active'>;journal:OperationJournal;official:OfficialOperations;cloud:OperationCloud;clock?:()=>number}
+export interface OperationContext{pair:Pick<Pair,'pairId'|'rootKey'|'hostToken'|'active'|'relayRetiredAt'>;journal:OperationJournal;official:OfficialOperations;cloud:OperationCloud;clock?:()=>number}
 export function parseCommand(value:unknown,id:string):Command{
  const c=object(value);text(c.agentId);if(c.type==='send'){exact(c,['type','agentId','text','messageId']);text(c.text,60000);if(c.messageId!==id)throw Error('MESSAGE_ID_MISMATCH')}
  else if(c.type==='permission'){exact(c,['type','agentId','requestId','requestBinding','response']);text(c.requestId);decode(c.requestBinding,32);const r=object(c.response);
@@ -30,7 +30,7 @@ export function validateCommand(value:unknown,id:string,current:CurrentAgent|nul
 export async function boundCurrent(ctx:Pick<OperationContext,'pair'|'journal'|'official'>,agentId:string):Promise<CurrentAgent|null>{const current=await ctx.official.current(agentId);if(!current)return null;const source=ctx.official.requestContext?.();if(!source)return current;const requests=current.pendingPermissions||[];ctx.journal.syncRequests(source.serverId,agentId,source.generation,requests);return {...current,pendingPermissions:await Promise.all(requests.map(async r=>{const occurrence=ctx.journal.currentOccurrence(source.serverId,agentId,r.id);if(!occurrence)return {...r,requestBinding:undefined};return {...r,occurrence,requestBinding:await occurrenceBinding(ctx.pair,occurrence)}}))};}
 async function outcome(ctx:OperationContext,e:Pick<Envelope,'pairId'|'id'|'expiresAt'>,state:ReceiptState,now:number,code?:string){
  const old=ctx.journal.get(e.pairId,e.id)!;if(old.state==='accepted'&&state==='unknown')state='accepted';if(old.state==='resolved'||old.state==='rejected')state=old.state;
- if(old.receipt&&old.state===state){await ctx.cloud.receipt(e.id,{state,revision:old.revision,envelope:old.receipt});ctx.journal.receiptSent(e.pairId,e.id,old.revision);return}
+ if(old.receipt&&old.state===state){if(old.sentRevision<old.revision){await ctx.cloud.receipt(e.id,{state,revision:old.revision,envelope:old.receipt});ctx.journal.receiptSent(e.pairId,e.id,old.revision)}return}
  if(now>=e.expiresAt+LIMITS.retentionMs)return;const revision=old.revision+1;
  const envelope=await sealEnvelope(decode(ctx.pair.rootKey,32),{version:1,pairId:e.pairId,id:e.id,channel:'receipt',issuedAt:now,expiresAt:now+LIMITS.snapshotMs},{operationId:e.id,state,revision,...(code?{code}:{})});ctx.journal.outcome(e.pairId,e.id,state,envelope,code,revision);await ctx.cloud.receipt(e.id,{state,revision,envelope});ctx.journal.receiptSent(e.pairId,e.id,revision);
 }
@@ -40,10 +40,10 @@ export async function reconcileJournal(ctx:OperationContext,now=Date.now()){
 }
 export async function executeOperation(ctx:OperationContext,input:unknown,now?:number){
  const clock=ctx.clock||(now===undefined?Date.now:()=>now!);now=now??clock();
- const e=validateEnvelope(input,now);if(e.channel!=='command'||e.pairId!==ctx.pair.pairId||!ctx.pair.active)throw Error('PAIR_NOT_ACTIVE');
+ const e=validateEnvelope(input,now);if(e.channel!=='command'||e.pairId!==ctx.pair.pairId||!ctx.pair.active||ctx.pair.relayRetiredAt!==undefined)throw Error('PAIR_NOT_ACTIVE');
  const value=await openEnvelope(decode(ctx.pair.rootKey,32),e,now);const command=parseCommand(value,e.id);const {record,fresh}=ctx.journal.prepare(e);
  if(fresh)ctx.journal.evidence(e.pairId,e.id,evidenceForCommand(command,ctx.official.requestContext?.().serverId||''));
- if(!fresh){if(record.state==='prepared')return;if(record.receipt&&(record.state==='accepted'||record.state==='resolved'||record.state==='rejected')){await ctx.cloud.receipt(e.id,{state:record.state,revision:record.revision,envelope:record.receipt});return}const reconciled=await ctx.official.reconcile(command,ctx.pair);await outcome(ctx,e,reconciled||'unknown',now,reconciled?undefined:'UNCONFIRMED');return;}
+ if(!fresh){if(record.state==='prepared')return;if(record.receipt&&(record.state==='accepted'||record.state==='resolved'||record.state==='rejected')){await outcome(ctx,e,record.state,now);return}const reconciled=await ctx.official.reconcile(command,ctx.pair);await outcome(ctx,e,reconciled||'unknown',now,reconciled?undefined:'UNCONFIRMED');return;}
  if(ctx.journal.blocked(e.pairId,e.id))return;
  const current=await boundCurrent(ctx,command.agentId);let invalid=false;try{validateCommand(value,e.id,current)}catch{invalid=true}
  if(command.type==='permission'){const occurrence=current?.pendingPermissions?.find(r=>r.id===command.requestId)?.occurrence;if(occurrence)ctx.journal.evidenceOccurrence(e.pairId,e.id,occurrence.occurrenceId)}

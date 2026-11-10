@@ -22,6 +22,18 @@ An API origin is operator/application configuration, never derived from a signed
 host's human-readable name. Loopback plaintext requires explicit development
 configuration at both endpoints; ordinary enrollment rejects plaintext URLs.
 
+Public enrollment is quota-bound, not invitation-authenticated. The deployment
+can fail closed with503 while disabled/misconfigured, or429 when normal/recovery
+route allowance is exhausted. Daily quota `Retry-After` refers to the original
+UTC-day reset; clients honor it without resealing envelopes, extending authority
+or replaying an uncertain mutation. All routes use normal allowance first.
+Only after normal exhaustion can fixed-method/path-eligible routes fall back to
+the bounded recovery reserve; a caller priority header cannot select it. Cached
+normal exhaustion must not block eligible fallback. A quota/routing
+acknowledgement is not endpoint execution evidence. These guards reduce bounded
+downstream work; incoming/rejected requests remain potentially billable and no
+account-level money ceiling is implied.
+
 ## Enrollment
 
 ### POST /pairs
@@ -33,6 +45,14 @@ atomic and rejects a conflicting identity, including after revocation. Exact
 same-configuration retry returns the same enrollment state without allocating
 another record. No endpoint key is transmitted. Host bearer proves subsequent
 ownership. Server refuses an already expired offer.
+The internal admission catalog binds the original create parameters before
+forwarding to PairObject. A retained UUID is not permission to replace credentials
+or extend offer expiry when the PairObject is missing/purged. Exact original
+retries can finish a missing create only within the original live offer interval;
+they never allocate a second catalog reservation. Legacy unbound catalog rows
+reject create retries fail-closed without removing authenticated routing access.
+The internal fingerprint contains only a digest of existing public offer fields,
+never endpoint secrets, and adds no public request fields.
 
 ### POST /pairs/{pairId}/claim
 
@@ -84,9 +104,15 @@ without contacting cloud.
 ### PUT /pairs/{pairId}/state; GET /pairs/{pairId}/state
 
 Host writes, phone reads. Body/response contains `{envelope}` with `state` channel.
-Only the latest nonexpired snapshot is retained, monotonic by issuedAt then
-immutable ID. Exact retries succeed; conflicting IDs/older snapshots never
-replace newer state. Encrypted state is a versioned object with verified daemon
+Only the latest nonexpired snapshot keeps ciphertext, monotonic by issuedAt then
+immutable ID. Each state ID/digest remains a conflict guard through its own
+original envelope expiry, including after supersession; no additional24hour
+state audit retention applies. Exact retries do not refresh authority or expiry;
+conflicting IDs/older snapshots never replace newer state. After expiry, a retry
+cannot be admitted as new live state. Supersession clears only the previous
+payload-bearing state, never rewrites older null tombstones. Operation, control,
+attention and minimal authenticated outcome retention is unchanged.
+Encrypted state is a versioned object with verified daemon
 identity, host name, measured timestamp and bounded actual tasks/available usage.
 No complete chat, code files or credentials.
 
