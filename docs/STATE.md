@@ -2,7 +2,36 @@
 
 ## Scope
 
-Owner-approved notification/scoped-delivery first iteration; Apache-2.0. Standalone Node24 companion targeting inspected official SDK/protocol 0.15.3. Existing iOS protocol-vector floor is independent and unchanged. OpenUI, system extensions and broader native surfaces belong to later app iterations.
+Owner-approved notification/scoped delivery and local activity/widget integration; Apache-2.0. Standalone Node24 companion targeting inspected official SDK/protocol0.15.3. Existing iOS protocol-vector floor is independent and unchanged. OpenUI and broader system extensions remain outside this scope.
+
+## Active work — unreleased activity/widget integration
+
+- Published install identity is **`@moxuli/moremote`0.1.1**; command/runtime
+  remains `moremote-cli`, with existing per-platform service identities.
+  Local activity/widget changes are **not released**; no version bump.
+- Implemented locally: authenticated encrypted per-task interests and activity
+  state, an owned optional2s host lane with250ms exact fallback reads, meaningful
+  keyed widget fingerprints on existing snapshot publication, and normal-only
+  quota pauses that preserve eligible terminal recovery. Commands/controls do
+  not await activity work; shutdown/drain joins it before SDK/journal close.
+- Limits/expiry/error/dataflow truth lives in [[configuration]] and
+  [[specs/03-api-contract#Opt-in task activities and widget reloads]].
+  Interest expiry is at most8h (8 per pair); state at most600s, fresh acknowledged
+  renewal around8min. Unknown admissions retain exact bytes. Widget registration
+  expires24h with native renewal around12h. Missing tasks never imply finish.
+- Integration-owner-reported evidence: CLI typecheck and57 tests across
+  `tests/activity.test.ts`, `tests/cloud-retry.test.ts` and
+  `tests/runtime-receipt.test.ts` passed. This is targeted local evidence, not
+  a newly green full suite, released artifact, or physical/device acceptance.
+- Next gates: independent integration review and owner verification of the final
+  delta; authorized native Live Activity/widget rendering, stale/offline and
+  token replacement/expiry acceptance; separately authorized live cloud/APNs
+  delivery. APNs200 is provider admission, not delivery. Historical alert proof
+  below does not cover either new surface.
+- Cloud remains **DISABLED** in this phase. No deployment, account/device
+  mutation, release or everyday service installation is authorized here.
+  Continue autonomously from these living docs within that boundary; record
+  actual evidence before advancing an external gate.
 
 ## Approved identity cutover — locally verified
 
@@ -10,9 +39,10 @@ The owner approved the complete rename to **MoRemote CLI** on 2026-11-10:
 repository/command `moremote-cli`, current public npm `@moxuli/moremote`, entry `bin/moremote-cli.js`,
 `MOREMOTE_CLI_HOME`, state `MoRemoteCLI` on macOS/Windows and `moremote-cli`
 on Linux, and services `com.moremote.cli` / `moremote-cli.service` / `MoRemoteCLI`.
-Ownership/runtime/client/managed-package identities move together. There is no
-released package or installed service to migrate: no compatibility aliases or
-automatic adoption of old state. Foreign-resource protections remain strict.
+Ownership/runtime/client/managed-package identities move together.
+At the original rename checkpoint there was no released package or installed
+service to migrate: no compatibility aliases or automatic adoption of old state.
+The later0.1.0/0.1.1 publications are recorded below. Foreign-resource protections remain strict.
 The `companionHello` role, crypto salt/envelope schema, APNs categories and
 app/Keychain identities are unchanged.
 

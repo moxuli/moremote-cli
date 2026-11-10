@@ -3,7 +3,7 @@
 Optional, independent Apache-2.0 computer companion for MoRemote and an **unmodified Paseo 0.15.3** daemon. Existing official-only clients keep working without this project or its cloud.
 
 Canonical repository/command: `moremote-cli`; public npm package:
-**`@moxuli/moremote`**; source entry: `bin/moremote-cli.js`.
+**`@moxuli/moremote`** (published **0.1.1**); source entry: `bin/moremote-cli.js`.
 There is no unscoped npm alias or automatic adoption of foreign/old state.
 
 ## Install the published package
@@ -43,6 +43,33 @@ node bin/moremote-cli.js run
 ```
 
 `pair` explicitly prints a **secret**, ten-minute, one-phone QR/link. Do not share screenshots or put it in logs. `--json` emits the canonical offer for explicit paste. It waits for the one-use claim and verifies the phone’s encrypted proof before activating that phone, within the original offer deadline. Each phone gets its own local 32-byte root key; only the phone receives it, never the relay. See [wire contracts](docs/specs/02-encrypted-delivery.md), [endpoint controls](docs/specs/04-control-and-receipt-lifecycle.md) and [endpoint behavior](docs/specs/05-endpoint-and-lifecycle.md).
+
+## Optional activities and widget reloads — unreleased source
+
+Local source adds per-task encrypted Live Activity state and keyed widget-change
+fingerprints. These changes are **not in published 0.1.1**; the package version
+has not changed. They require a compatible native app and separately configured
+relay/APNs capabilities; installing the CLI alone enables neither surface.
+Cloud remains off by default.
+
+The phone owns task selection, encrypted read-only interest and native push
+tokens; the companion authenticates that interest against the pinned daemon and
+publishes bounded official task measurements. Up to eight interests per pairing
+expire within eight hours; activity states expire within ten minutes. Missing
+tasks are not reported finished. Acknowledged ongoing state renews from fresh
+measurements around every eight minutes; lost acknowledgements preserve exact
+ciphertext until expiry. Commands and controls do not await the optional activity
+lane. Widget reloads depend on meaningful snapshot changes, use the existing
+encrypted snapshot and are opportunistic, not realtime delivery.
+
+The relay sees opaque routing/equality tags, registration identities, tokens,
+environment, envelope metadata and ciphertext—not decrypted task titles or
+usage. Apple receives the token and push payload: encrypted activity content or
+a generic widget-change signal. Device rendering, widget freshness/offline
+behavior and APNs delivery for these new surfaces remain **pending acceptance**;
+APNs HTTP 200 means provider admission only. See [operator limits and failure
+semantics](docs/configuration.md#optional-activity-and-widget-surfaces-unreleased)
+and the [living wire contract](docs/specs/03-api-contract.md#opt-in-task-activities-and-widget-reloads).
 
 ## What leaves the computer
 

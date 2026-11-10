@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+- Add optional encrypted per-task activity interests/state and keyed meaningful-change widget reload fingerprints; existing official-only and scoped-command behavior remains independent.
+- Bound activity work in an owned cancellation-aware lane without blocking commands/controls; renew acknowledged ongoing measurements before expiry, retain unknown immutable retries, and preserve terminal recovery under validated normal-only quota pauses.
+- Document registration expiry/non-resurrection, exact pre-transport provider fences and pending native/live APNs acceptance. These local changes are not included in published `@moxuli/moremote`0.1.1; no version bump or deployment.
+
 ## 0.1.1 — 2026-11-10
 
 - Fix real Windows named-pipe request/response delivery using bounded frames without prematurely half-closing the channel; retain authentication, absolute deadlines and owned cleanup.
