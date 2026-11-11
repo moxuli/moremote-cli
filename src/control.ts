@@ -17,6 +17,13 @@ function removeRuntimeFile(path:string,identity:ResourceIdentity,owner:RuntimeOw
 function running(pid:number) {
  try {process.kill(pid,0);return true;} catch(error) {if(hasCode(error,'ESRCH'))return false;throw error;}
 }
+export function runtimeHasLiveOwner(dir:string):boolean {
+ if(!inspectResource(dir,'directory',true))return false;
+ if(readdirSync(dir).length===0)return false;
+ assertStateRoot(dir);
+ const {lock}=inspectRuntime(dir);
+ return lock!==null&&running(lock.value.pid);
+}
 export async function requestControl(dir:string,action:'status'|'stop'):Promise<Record<string,unknown>|null> {
  if(!inspectResource(dir,'directory',true))return null;
  if(readdirSync(dir).length===0)return null;

@@ -2,7 +2,8 @@ import {spawn,type ChildProcess} from 'node:child_process';
 import {setTimeout as sleep} from 'node:timers/promises';
 import {managedEntry} from './service.js';
 import {checkForUpdate,compatibleEntry} from './updater.js';
-import {readUpdateState,writeUpdateState,updateLock,supervisorStopRequested} from './update-state.js';
+import {readUpdateState,writeUpdateState,updateLock,supervisorStopRequested,requestSupervisorStop,supervisorRunning} from './update-state.js';
+import {requestControl,runtimeHasLiveOwner} from './control.js';
 
 export interface ManagedRuntime {child:ChildProcess;exit:Promise<number>;ready:()=>boolean;closed:()=>boolean}
 export function launchRuntime(entry:string,dir:string,onReady:()=>void=()=>{}):ManagedRuntime{
@@ -19,6 +20,35 @@ export async function drainRuntime(runtime:ManagedRuntime){
 }
 export async function startupHealthy(runtime:ManagedRuntime,signal?:AbortSignal,grace=10000,deadline=30000,cancel=()=>false){
  const start=Date.now();while(!runtime.closed()&&!signal?.aborted&&!cancel()){if(runtime.ready()&&Date.now()-start>=grace)return true;if(Date.now()-start>=deadline)return false;await sleep(100,undefined,{signal}).catch(()=>{})}return false;
+}
+
+async function stopRuntime(dir:string){
+ if(!await requestControl(dir,'stop'))return;
+ for(let i=0;i<300;i++){await sleep(200);if(!await requestControl(dir,'status'))return}
+ throw Error('STOP_TIMEOUT');
+}
+export async function stopManagedRuntime(dir:string){
+ requestSupervisorStop(dir);let controlUnavailable=false;
+ // Native service shutdown may close IPC before its owned records are retired.
+ // A transport's absent generation is not proof that no replacement is alive.
+ try{await stopRuntime(dir)}catch(error){
+  if(error instanceof Error&&(error.message==='LEGACY_WINDOWS_CONTROL_UNAVAILABLE'||error.message==='CONTROL_CONNECTION_CLOSED')&&readUpdateState(dir))controlUnavailable=true;
+  else throw error;
+ }
+ if(!readUpdateState(dir)){
+  if(runtimeHasLiveOwner(dir))throw Error('STOP_TIMEOUT');
+  return;
+ }
+ for(let i=0;i<900;i++){
+  if(!supervisorRunning(dir)){
+   if(controlUnavailable&&await requestControl(dir,'status'))throw Error('STOP_TIMEOUT');
+   // Revalidate synchronously after the awaited probe, including lock-only startup.
+   if(supervisorRunning(dir)||runtimeHasLiveOwner(dir))throw Error('STOP_TIMEOUT');
+   return;
+  }
+  await sleep(200);
+ }
+ throw Error('SUPERVISOR_STOP_TIMEOUT');
 }
 export async function runSupervisor(dir:string,timing:{pollMs?:number;startupGraceMs?:number;startupDeadlineMs?:number}={}){
  return updateLock(dir,async()=>{

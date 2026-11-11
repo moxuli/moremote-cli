@@ -1,4 +1,4 @@
-# Current state — 2026-11-10
+# Current state — 2026-11-11
 
 ## Scope
 
@@ -49,6 +49,22 @@ Owner-approved notification/scoped delivery and local activity/widget integratio
   SQLite journals retain exactly two settled operations. This is not physical
   locked-notification UI or whole native-package acceptance. Earlier observer and
   incidental-prose harness failures were corrected without product exceptions.
+
+## Native macOS service continuation — partial acceptance
+
+The current compiled source controller passed real launchd install/start/status/
+stop/uninstall against the published0.1.1 managed runtime in an unused, isolated
+per-user registration. A concurrent graceful-drain control-closure failure was
+reproduced and corrected with an authoritative ownership-retirement barrier.
+22 focused shutdown/frontend/control/CLI regressions, typecheck and build pass.
+The final registration, plist and owned state were removed; cloud stayed disabled
+and no official connection or real-work session was used.
+
+See [native service evidence](plans/2026-11-11-native-service-acceptance.md).
+Independent review closed a reproduced replacement-owner race with fresh post-probe
+supervisor/runtime liveness checks. A new immutable public release, installed-service
+published upgrade/rollback, and Linux/Windows native service gates remain open.
+Published0.1.1 does not contain the new correction.
 
 ## Approved identity cutover — locally verified
 
@@ -211,8 +227,8 @@ Official tag v0.15.3 points to commit d91ae138cb931447635e94296023414a58bedcc5. 
 
 - Independent specification and quality/security reviews and frozen local check results belong to the integration owner.
 - Hosted cross-platform CI, exactv0.1.1 tag, npm publication, signed provenance and GitHub assets are verified above. Environment deployment is `v*`-tag-only. No broader branch/tag Ruleset or trusted-publisher migration is claimed.
-- Real per-user launchd/systemd/Windows logon-task installation requires point-of-use operator authorization and testing on each OS; adapters are source, not evidence of another OS’s acceptance.
-- No everyday login service, real-work-session send/approval or paid-model task was exercised. Native service-manager installation still needs explicit per-platform operator acceptance.
+- The isolated macOS installed-service lifecycle has partial native acceptance above. Real published-version activation/rollback and Linux/systemd and Windows/logon-task installations still require their own operator-authorized OS observations.
+- No everyday login service, real-work-session send/approval or paid-model task was exercised. The temporary macOS registration was removed; it is not daily-host deployment.
 - One authorized synthetic sandbox alert was observed on a real iPad through the independent cloud/app path. This is not genuine permission/reply execution, production TestFlight delivery or terminated-app acceptance; emulation and artifact installation do not establish those gates.
 
 Continue from this file and living specs, not private machine history. Record exercised evidence here before claiming a verified release.
