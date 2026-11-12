@@ -1,4 +1,4 @@
-# Current state — 2026-11-11
+# Current state — 2026-11-12
 
 ## Scope
 
@@ -62,9 +62,46 @@ and no official connection or real-work session was used.
 
 See [native service evidence](plans/2026-11-11-native-service-acceptance.md).
 Independent review closed a reproduced replacement-owner race with fresh post-probe
-supervisor/runtime liveness checks. A new immutable public release, installed-service
-published upgrade/rollback, and Linux/Windows native service gates remain open.
-Published0.1.1 does not contain the new correction.
+supervisor/runtime liveness checks. The November12 continuation below additionally
+accepts native macOS upgrade/rollback with a real published bootstrap and synthetic
+candidates. A next immutable release and Linux/Windows native gates remain open.
+Published0.1.1 does not contain the later source corrections.
+
+## Packaged rollback continuation — 2026-11-12
+
+The local macOS packaged smoke now exercises production `queueUpdate` and the
+retained supervisor with three real npm-installed synthetic package versions:
+9000.0.1→9000.0.2 succeeds; compatible9000.0.3 exits before runtime readiness,
+and the supervisor returns to9000.0.2. Authenticated status confirms the recovered
+version. Bootstrap/previous remain9000.0.1, failed9000.0.3 is recorded, and
+pending/activating are absent. The retained aliased frontend and final clean
+shutdown also pass. Only disposable failed-candidate package bytes are altered.
+
+`npm run build` passes. The first expanded smoke stops during fixture setup
+because its new import accidentally omitted `managedEntry`; no supervisor starts.
+After restoring that import, the exact smoke passes in133.54seconds, including
+owned-process/file cleanup. This is not a newly green full unit suite or new
+hosted-platform result. That smoke installs no native login service and changes no
+official daemon, cloud, real session or public package. The separate installed
+macOS journey is recorded below; Linux/Windows observations remain open.
+
+## Installed macOS upgrade continuation — 2026-11-12
+
+An actual launchd test exposes raw-path ownership rejection after macOS resolves
+`/tmp` to `/private/tmp`. Canonical parent aliases now require ordinary leaves,
+equal device/inode and equal real paths; leaf symlinks and foreign files remain
+rejected. All10service-lifecycle consumers, typecheck and build pass; independent
+OpenCode review finds no blocker. Distinct hard links/bind mounts remain refused.
+
+The real installed-service journey passes in181.29seconds: verified public0.1.1
+bootstrap, current9000.0.2 synthetic activation, failed9000.0.3 startup, recovery
+to9000.0.2, then normal stop/uninstall with registration/plist/owned successful-run
+files removed. An earlier fixture missed the required client-ID prefix; that
+`INVALID_CONFIG` startup failure is not a product defect. First-run cleanup safely
+used its independently established canonical definition before the product fix.
+No real official connection or cloud operation occurred. Details and remaining
+public-release/platform limits: [native service evidence](plans/2026-11-11-native-service-acceptance.md).
+
 
 ## Approved identity cutover — locally verified
 

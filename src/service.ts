@@ -3,7 +3,7 @@ import { createHash,randomUUID } from 'node:crypto';
 import { join,dirname } from 'node:path';
 import { homedir,userInfo } from 'node:os';
 import { constants } from 'node:fs';
-import { mkdir,readFile,unlink,access,lstat,open,rename,link,mkdtemp,rm } from 'node:fs/promises';
+import { mkdir,readFile,unlink,access,lstat,open,rename,link,mkdtemp,rm,realpath } from 'node:fs/promises';
 import {privateDirectory,privateManagedDirectory} from './config.js';
 import {PACKAGE,exactVersion,updateLock} from './update-state.js';
 const taskName='\\MoRemoteCLI';
@@ -57,6 +57,16 @@ function xmlValue(content:string,element:string){
  const value=content.match(new RegExp('<'+element+'(?:\\s[^>]*)?>([\\s\\S]*?)</'+element+'>'))?.[1];
  return value?.replaceAll('&quot;','"').replaceAll('&apos;',"'").replaceAll('&lt;','<').replaceAll('&gt;','>').replaceAll('&amp;','&');
 }
+async function sameRegistrationPath(actual:string|undefined,expected:string){
+ if(actual===expected)return true;
+ if(!actual)return false;
+ try{
+  const [loaded,file]=await Promise.all([lstat(actual),lstat(expected)]);
+  return loaded.isFile()&&!loaded.isSymbolicLink()&&file.isFile()&&!file.isSymbolicLink()
+   &&loaded.dev===file.dev&&loaded.ino===file.ino
+   &&await realpath(actual)===await realpath(expected);
+ }catch{return false}
+}
 async function registration(def:ServiceDefinition,content:string|undefined):Promise<'registered'|'absent'>{
  if(def.platform==='darwin'){
   let raw:string;
@@ -66,12 +76,12 @@ async function registration(def:ServiceDefinition,content:string|undefined):Prom
    throw error;
   }
   const path=raw.match(/^\s*path = (.+)\s*$/m)?.[1]?.trim();
-  if(path!==def.path)throw Error('FOREIGN_SERVICE_REGISTRATION');
+  if(!await sameRegistrationPath(path,def.path))throw Error('FOREIGN_SERVICE_REGISTRATION');
  }else if(def.platform==='linux'){
   const raw=await command('systemctl',['--user','show','moremote-cli.service','--property=FragmentPath,LoadState,ActiveState'],true);
   const path=raw.match(/^FragmentPath=(.*)$/m)?.[1],load=raw.match(/^LoadState=(.*)$/m)?.[1];
   if(path===''&&load==='not-found')return 'absent';
-  if(path!==def.path)throw Error(path?'FOREIGN_SERVICE_REGISTRATION':'SERVICE_MANAGER_INVALID_RESPONSE');
+  if(!await sameRegistrationPath(path,def.path))throw Error(path?'FOREIGN_SERVICE_REGISTRATION':'SERVICE_MANAGER_INVALID_RESPONSE');
  }else if(def.platform==='win32'){
   let raw:string;
   try{raw=await command('powershell.exe',['-NoProfile','-NonInteractive','-Command',windowsQuery],true)}

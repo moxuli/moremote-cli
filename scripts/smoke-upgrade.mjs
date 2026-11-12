@@ -8,7 +8,8 @@ import {tmpdir} from 'node:os';
 import {setTimeout as sleep} from 'node:timers/promises';
 import {saveConfig,privateManagedDirectory} from '../dist/config.js';
 import {managedEntry} from '../dist/service.js';
-import {initialUpdateState,writeUpdateState,readUpdateState,requestSupervisorStop,updateLock} from '../dist/update-state.js';
+import {queueUpdate} from '../dist/updater.js';
+import {initialUpdateState,writeUpdateState,readUpdateState,requestSupervisorStop} from '../dist/update-state.js';
 import {requestControl} from '../dist/control.js';
 const npm=process.env.npm_execpath;assert(npm?.endsWith('npm-cli.js'),'Invoke with npm run smoke:upgrade');
 const root=await mkdtemp(join(process.platform==='win32'?tmpdir():'/tmp','mru-')),dir=join(root,'state');
@@ -57,10 +58,16 @@ try{
  const original=JSON.parse(npmRun(['pack','--json','--ignore-scripts','--pack-destination',root]))[0];
  await saveConfig(dir,{version:1,clientId:'moremote-cli-packaged-acceptance',target:'tcp://127.0.0.1:1',paseoHome:join(root,'unused-official'),allowLoopbackHttp:false,cloudEnabled:false,pairs:[]});
  await privateManagedDirectory(join(dir,'managed'));await privateManagedDirectory(join(dir,'managed','versions'));
- for(const version of ['9000.0.1','9000.0.2']){
+ for(const version of ['9000.0.1','9000.0.2','9000.0.3']){
   checkpoint('pack '+version);
   const build=join(root,version);await mkdir(build);execFileSync('tar',['-xf',join(root,original.filename),'-C',build],{timeout:10000,killSignal:'SIGKILL'});const source=join(build,'package');
   const pkg=JSON.parse(await readFile(join(source,'package.json'),'utf8'));pkg.version=version;await writeFile(join(source,'package.json'),JSON.stringify(pkg));
+  if(version==='9000.0.3'){
+   // A valid, compatible package whose managed runtime fails before readiness.
+   // Only these disposable package bytes change; production code stays intact.
+   const cli=join(source,'dist','cli.js');
+   await writeFile(cli,"if(process.env.MOREMOTE_MANAGED_CHILD==='1')process.exit(73);\n"+await readFile(cli,'utf8'));
+  }
   const tarball=JSON.parse(npmRun(['pack','--json','--ignore-scripts','--pack-destination',build],source))[0];
   checkpoint('install '+version);
   npmRun(['install','--prefix',join(dir,'managed','versions',version),'--ignore-scripts','--no-audit','--no-fund','--fetch-retries=0','--fetch-timeout=20000','--registry=https://registry.npmjs.org',join(build,tarball.filename)]);
@@ -72,7 +79,7 @@ try{
  supervisor=track(spawn(process.execPath,[entry,'run','--data-dir',dir],{detached:process.platform!=='win32',stdio:['ignore','ignore','inherit','ipc']}));
  assert.equal(await deadline(supervisor.ready,20000,'INITIAL_PACKAGED_RUNTIME_NOT_RUNNING'),'9000.0.1');assert.equal((await requestControl(dir,'status'))?.version,'9000.0.1');
  checkpoint('queue compatible candidate');
- await updateLock(dir,async()=>{const s=readUpdateState(dir);s.pending='9000.0.2';s.pendingManual=true;writeUpdateState(dir,s)});
+ await queueUpdate(dir,'9000.0.2');
  await until(async()=>readUpdateState(dir)?.active==='9000.0.2'&&(await requestControl(dir,'status'))?.version==='9000.0.2','PACKAGED_UPDATE_DID_NOT_ACTIVATE',90000);
  assert.equal(readUpdateState(dir).previous,'9000.0.1');await managedEntry(dir,'9000.0.1');
  checkpoint('verify frontend through symlinked parent');
@@ -86,11 +93,22 @@ try{
  frontendRun.child.stderr.on('data',chunk=>{stderrSize+=chunk.length;if(stderrSize>65536){outputLimit=true;void terminate(frontendRun).catch(()=>{})}});
  const frontendResult=await deadline(frontendRun.exit,10000,'ALIASED_FRONTEND_TIMEOUT');
  assert.equal(outputLimit,false);assert.equal(frontendResult.code,0);assert.equal(stdout.trim(),'9000.0.2','retained frontend must dispatch once to selected CLI despite parent path aliases');
+ checkpoint('queue failing compatible candidate');
+ await queueUpdate(dir,'9000.0.3');
+ await until(async()=>readUpdateState(dir)?.failed==='9000.0.3'
+  &&readUpdateState(dir)?.active==='9000.0.2'
+  &&(await requestControl(dir,'status'))?.version==='9000.0.2',
+  'PACKAGED_UPDATE_DID_NOT_ROLL_BACK',90000);
+ const recovered=readUpdateState(dir);
+ assert.equal(recovered.bootstrap,'9000.0.1');assert.equal(recovered.previous,'9000.0.1');
+ assert.equal(recovered.error,'UPDATE_START_FAILED');
+ assert.equal(recovered.pending,undefined);assert.equal(recovered.activating,undefined);
+ await managedEntry(dir,'9000.0.1');await managedEntry(dir,'9000.0.3');
  checkpoint('stop owned supervisor');
  requestSupervisorStop(dir);await deadline(requestControl(dir,'stop'),2500,'STOP_CONTROL_TIMEOUT');
  assert.equal((await deadline(supervisor.exit,20000,'SUPERVISOR_STOP_FAILED')).code,0);
  complete=true;checkpoint('accepted');
- console.log('Real packaged upgrade accepted: 9000.0.1 → 9000.0.2; retained bootstrap/previous; aliased frontend; clean stop; no service installed.');
+ console.log('Real packaged upgrade accepted: 9000.0.1 → 9000.0.2; failed 9000.0.3 rolls back; retained bootstrap/previous; aliased frontend; clean stop; no service installed.');
 }finally{
  try{await cleanup()}finally{process.removeListener('SIGINT',onInterrupt);process.removeListener('SIGTERM',onTerminate)}
 }

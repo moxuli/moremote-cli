@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
 import { mkdtemp,mkdir,writeFile,readFile,chmod,rm,symlink,lstat } from 'node:fs/promises';
-import { join,dirname } from 'node:path';
+import { join,dirname,relative } from 'node:path';
 import { tmpdir } from 'node:os';
 import { installService,managedEntry,removeService,serviceDefinition,serviceStatus,stopService,updatePackage } from '../src/service.ts';
 import type { ServiceDefinition } from '../src/service.ts';
@@ -91,6 +91,30 @@ test('foreign manager registration cannot be stopped, removed or overwritten',ex
   await assert.rejects(stopService(def),/FOREIGN_SERVICE_REGISTRATION/);await assert.rejects(removeService(def),/FOREIGN_SERVICE_REGISTRATION/);await assert.rejects(installService(def),/FOREIGN_SERVICE_REGISTRATION/);
   assert.equal(await readFile(def.path,def.platform==='win32'?'utf16le':'utf8'),def.content);
  }
+ }finally{await f.close()}
+});
+
+test('canonical parent aliases retain exact owned native service management',executableFixtures,async()=>{
+ const f=await fixture();try{for(const platform of ['darwin','linux']){
+  const alias=join(f.dir,'home-alias-'+platform);await symlink(f.home,alias,'dir');
+  const original=await f.select(platform);
+  const reported=join(alias,relative(f.home,original.path));
+  const def=await f.select(platform,true,{path:reported});await writeDefinition(def);
+  assert.deepEqual(await serviceStatus(def),{owned:true,registration:'registered'});
+  await stopService(def);await removeService(def);await assert.rejects(lstat(def.path),{code:'ENOENT'});
+ }}finally{await f.close()}
+});
+
+test('a manager-reported leaf symlink never grants native service authority',executableFixtures,async()=>{
+ const f=await fixture();try{for(const platform of ['darwin','linux']){
+  const def=await f.select(platform);await writeDefinition(def);
+  const alias=join(f.dir,'leaf-'+platform);await symlink(def.path,alias);
+  await f.select(platform,true,{path:alias});
+  await assert.rejects(stopService(def),/FOREIGN_SERVICE_REGISTRATION/);
+  await assert.rejects(removeService(def),/FOREIGN_SERVICE_REGISTRATION/);
+  assert.equal(await readFile(def.path,'utf8'),def.content);
+ }
+ assert.equal((await f.commands()).filter(c=>c.args.includes('bootout')||c.args.includes('stop')||c.args.includes('disable')).length,0);
  }finally{await f.close()}
 });
 

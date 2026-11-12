@@ -8,6 +8,8 @@
 - Preserve request-bound attention until that exact official request is resolved or retired; bind notice identity to its occurrence so reconnect/replacement cannot strand a still-pending question.
 - Derive completion/error notice identity from the canonical official attention timestamp, not the raw broadcast clock. Bound hydration to one in-flight read plus one latest event per agent and fence stale replies without letting an older observation cancel a newer terminal event.
 - Correct managed shutdown when native service removal closes IPC during graceful drain: wait for supervisor/runtime ownership retirement instead of reporting a spurious control-channel failure. Preserve strict unmanaged/malformed-response errors and never replay an uncertain stop.
+- Extend real packaged-upgrade acceptance to verify failed-candidate startup rollback, retained bootstrap/previous versions, durable failure state and clean shutdown through the production updater/supervisor.
+- Recognize canonical parent-path aliases for exact owned launchd/systemd registration files, including macOS `/tmp`→`/private/tmp`, without accepting leaf symlinks, distinct files or foreign registrations.
 
 ## 0.1.1 — 2026-11-10
 
