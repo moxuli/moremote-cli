@@ -94,3 +94,39 @@ This accepts macOS native activation/rollback with real installed package bytes
 and a deliberately failing unpublished fixture. It is not a new immutable public
 release, public-to-public next-version delivery, Linux/Windows native acceptance,
 cloud activation or any real-work-session operation.
+
+## Linux user-service and Windows encoding continuation — 2026-11-12
+
+Actual Linux acceptance uses the existing Ubuntu26.04 user manager, systemd259
+and pinned Node24.13.0. The real unit reaches active/running/enabled and the
+authenticated control reports the installed version. QA0.1.1 activates synthetic
+9000.0.2, then rejects compatible9000.0.3 before readiness and recovers9000.0.2
+with unchanged bootstrap/previous0.1.1. Normal stop/uninstall leaves
+LoadState=not-found, an empty FragmentPath, absent definition/control and no live
+supervisor/runtime. This is actual user-systemd, not every Linux distribution.
+
+Windows diagnosis first identifies missing BOM in a UTF-16LE task file. Native
+COM syntax-only validation of a decoded string does not test the file-byte
+encoding consumed by schtasks. The writer now emits FF FE. That permits actual
+registration, exposing a second product defect in the state-resource consumer:
+it rejects the leading decoded U+FEFF before the XML declaration. The reader now
+consumes one leading BOM without relaxing other ownership or XML checks.
+
+The focused18consumer run includes writer-to-real-resource-reader validation,
+legacy unmarked UTF-16 ownership inspection, repeated-BOM rejection, wrong
+encoding and foreign-marker rejection. Typecheck and build also pass.
+
+The final unwrapped native Windows Task Scheduler run passes in168.23seconds.
+It installs/starts QA0.1.1, authenticates status, activates synthetic9000.0.2,
+rejects9000.0.3 before readiness and recovers9000.0.2, then normally stops and
+uninstalls. Independent task/definition/control checks are absent and no live
+supervisor/runtime remains. The exercised QA archive SHA256 is
+`8b5c55ac04edfaf5c93eb7b1708ad07be9eec5b0d288b04ec0b5dbbd81b4df82`.
+
+No console-token impersonation, account/policy change, real daemon/cloud
+operation or public release is used. A private fixture's elevated-owner ACL
+mismatch was recorded separately rather than misrepresented as a product login
+requirement. Failed and diagnostic task registrations were normally removed.
+An independent provider review could not run because its read tools were
+refused; no review approval is claimed.
+

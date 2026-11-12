@@ -10,6 +10,8 @@
 - Correct managed shutdown when native service removal closes IPC during graceful drain: wait for supervisor/runtime ownership retirement instead of reporting a spurious control-channel failure. Preserve strict unmanaged/malformed-response errors and never replay an uncertain stop.
 - Extend real packaged-upgrade acceptance to verify failed-candidate startup rollback, retained bootstrap/previous versions, durable failure state and clean shutdown through the production updater/supervisor.
 - Recognize canonical parent-path aliases for exact owned launchd/systemd registration files, including macOS `/tmp`→`/private/tmp`, without accepting leaf symlinks, distinct files or foreign registrations.
+- Write Windows task definitions with the required UTF-16LE BOM and consume exactly one BOM when validating owned task XML, preserving foreign-resource and malformed-encoding rejection.
+- Complete isolated native Linux systemd and Windows Task Scheduler activation, failed-start rollback, stop and uninstall acceptance using packaged QA bytes; this does not publish a new release or exercise production cloud delivery.
 
 ## 0.1.1 — 2026-11-10
 

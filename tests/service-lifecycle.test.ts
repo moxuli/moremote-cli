@@ -6,6 +6,7 @@ import { join,dirname,relative } from 'node:path';
 import { tmpdir } from 'node:os';
 import { installService,managedEntry,removeService,serviceDefinition,serviceStatus,stopService,updatePackage } from '../src/service.ts';
 import type { ServiceDefinition } from '../src/service.ts';
+import { assertTaskResource } from '../src/resources.ts';
 
 const platforms=['darwin','linux','win32'];
 const executableFixtures={skip:process.platform==='win32'?'POSIX executable manager fixtures; Windows task adapter is exercised on POSIX without native registration':false};
@@ -77,6 +78,12 @@ test('confirmed absence differs from unavailable manager and native lifecycle us
  const f=await fixture();try{for(const platform of platforms){
   const def=await f.select(platform);assert.deepEqual(await serviceStatus(def),{owned:false,registration:'absent'});
   await installService(def);assert.equal((await serviceStatus(def)).registration,'registered');
+  if(platform==='win32'){
+   const bytes=await readFile(def.path);
+   assert.deepEqual(bytes.subarray(0,2),Buffer.from([0xff,0xfe]),'The native XML file must declare its UTF-16LE byte order.');
+   assert.equal(bytes.toString('utf16le'),'\uFEFF'+def.content);
+   assertTaskResource(f.data,'win32');
+  }
   await stopService(def);await removeService(def);await assert.rejects(lstat(def.path),{code:'ENOENT'});
  }
  const calls=await f.commands();assert.ok(calls.some(c=>c.program==='launchctl'&&c.args[0]==='bootstrap'));
@@ -125,7 +132,7 @@ test('service replacement changes only an existing owned file and rejects foreig
   await assert.rejects(installService(def),/FOREIGN_SERVICE_FILE/);assert.equal(await readFile(def.path,'utf8'),'foreign file');
   await rm(def.path);await writeDefinition(def);const before=await lstat(def.path);
   await installService(def);
-  assert.equal(await readFile(def.path,platform==='win32'?'utf16le':'utf8'),def.content);
+  assert.equal(await readFile(def.path,platform==='win32'?'utf16le':'utf8'),(platform==='win32'?'\uFEFF':'')+def.content);
   const after=await lstat(def.path);assert.notEqual(after.ino,before.ino);assert.equal(after.isSymbolicLink(),false);
   if(process.platform!=='win32')assert.equal(after.mode&0o777,0o600);
  }}finally{await f.close()}

@@ -109,7 +109,9 @@ async function writeDefinition(def:ServiceDefinition){
  const temp=def.path+'.'+randomUUID()+'.tmp';
  const handle=await open(temp,constants.O_CREAT|constants.O_EXCL|constants.O_WRONLY|constants.O_NOFOLLOW,0o600);
  try{
-  try{await handle.writeFile(def.content,def.platform==='win32'?'utf16le':'utf8');await handle.sync()}finally{await handle.close()}
+  // Task Scheduler reads a file, not an already-decoded XML string. UTF-16 XML
+  // requires its byte-order mark so schtasks can select the declared encoding.
+  try{await handle.writeFile((def.platform==='win32'?'\uFEFF':'')+def.content,def.platform==='win32'?'utf16le':'utf8');await handle.sync()}finally{await handle.close()}
   const current=await ownedFile(def);
   if(original){
    if(!current||current.dev!==original.dev||current.ino!==original.ino||current.content!==original.content)throw Error('SERVICE_FILE_CHANGED');

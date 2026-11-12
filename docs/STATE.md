@@ -4,6 +4,34 @@
 
 Owner-approved notification/scoped delivery and local activity/widget integration; Apache-2.0. Standalone Node24 companion targeting inspected official SDK/protocol0.15.3. Existing iOS protocol-vector floor is independent and unchanged. OpenUI and broader system extensions remain outside this scope.
 
+## Native service acceptance — 2026-11-12
+
+- Actual Ubuntu26.04/Node24.13.0/systemd259 user-service acceptance passes:
+  install/start, authenticated status, QA0.1.1 → synthetic9000.0.2 activation,
+  failed9000.0.3 startup rollback, normal stop/uninstall and independent absence
+  of the unit, definition and live runtime. No cloud or real official daemon I/O.
+- Native Windows diagnosis exposed a missing UTF-16LE task-file BOM. Adding it
+  allowed registration but exposed a second real consumer defect: runtime
+  resource validation rejected its own BOM-prefixed XML. The writer now emits
+  BOM; the reader strips exactly one leading BOM while retaining all declaration,
+  Task-root, directory-bound marker, file-kind/link/mode and closing checks.
+- All18focused resource/lifecycle consumers, typecheck and build pass. Writer
+  bytes are consumed by the actual resource validator; double BOM, wrong encoding
+  and foreign ownership remain rejected.
+- Corrected native Windows Task Scheduler acceptance passes in168.23seconds:
+  install/start, authenticated status, QA0.1.1 → synthetic9000.0.2 activation,
+  failed9000.0.3 startup rollback and normal stop/uninstall. Independent checks
+  find no task, definition, control endpoint or live supervisor/runtime.
+- A separate read-only provider review was unavailable because both command and
+  file-read tools were refused. No review approval is claimed. All failed native
+  attempts/diagnostic registrations were removed through production APIs, with
+  independent absent task/definition/runtime evidence.
+- These are unpublished QA bytes, not a public-to-public update or npm release.
+  Source and exact exercised scope: [[2026-11-11-native-service-acceptance]].
+- The shared production cloud remains persistently enabled under the owner's
+  later decision; these isolated native tests neither use nor disable it. Older
+  temporary-window shutdown receipts below are historical, not current policy.
+
 ## Active work — unreleased activity/widget integration
 
 - Published install identity is **`@moxuli/moremote`0.1.1**; command/runtime

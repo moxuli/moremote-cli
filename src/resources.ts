@@ -157,7 +157,8 @@ export function writePrivateAtomic(path:string,value:unknown):ResourceIdentity {
 }
 export function assertTaskResource(dir:string,platform=process.platform) {
  if(platform!=='win32')throw Error('FOREIGN_TASK_RESOURCE');
- const text=readPrivateText(join(dir,'moremote-cli-task.xml'),131072,'utf16le').text;
+ const encoded=readPrivateText(join(dir,'moremote-cli-task.xml'),131072,'utf16le').text;
+ const text=encoded.startsWith('\uFEFF')?encoded.slice(1):encoded;
  const marker='Managed by moremote-cli; per-user ownership v1; owner='+createHash('sha256').update(dir).digest('hex');
  if(!text.startsWith('<?xml version="1.0" encoding="UTF-16"?>')||!text.includes('<Task version="1.2" xmlns="http://schemas.microsoft.com/windows/2004/02/mit/task">')||!text.includes('<Description>'+marker+'</Description>')||!text.trimEnd().endsWith('</Task>'))throw Error('FOREIGN_TASK_RESOURCE');
 }

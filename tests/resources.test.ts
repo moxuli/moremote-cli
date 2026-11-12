@@ -99,10 +99,13 @@ test('Windows task XML requires UTF16LE exact CLI marker bound to its data direc
  const dir=await fixture(),other=await fixture(),path=join(dir,'moremote-cli-task.xml');
  try {
   const definition=serviceDefinition('win32','/synthetic/home','C:\\synthetic\\node.exe','C:\\synthetic\\moremote-cli.js',dir);
-  await writeFile(path,definition.content,{encoding:'utf16le',mode:0o600});assertTaskResource(dir,'win32');
+  for(const prefix of ['', '\uFEFF']){
+   await writeFile(path,prefix+definition.content,{encoding:'utf16le',mode:0o600});assertTaskResource(dir,'win32');
+  }
   if(process.platform!=='win32')assert.throws(()=>assertStateResource(dir,'moremote-cli-task.xml'),/FOREIGN/);
   const foreign=serviceDefinition('win32','/synthetic/home','C:\\synthetic\\node.exe','C:\\synthetic\\moremote-cli.js',other);
-  await writeFile(path,foreign.content,'utf16le');assert.throws(()=>assertTaskResource(dir,'win32'),/FOREIGN/);
+  await writeFile(path,'\uFEFF'+foreign.content,'utf16le');assert.throws(()=>assertTaskResource(dir,'win32'),/FOREIGN/);
+  await writeFile(path,'\uFEFF\uFEFF'+definition.content,'utf16le');assert.throws(()=>assertTaskResource(dir,'win32'),/FOREIGN/);
   await writeFile(path,definition.content,'utf8');assert.throws(()=>assertTaskResource(dir,'win32'),/FOREIGN/);
  } finally {await rm(dir,{recursive:true,force:true});await rm(other,{recursive:true,force:true});}
 });
