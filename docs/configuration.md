@@ -15,11 +15,15 @@ HTTP response limit is5MiB, separately from the128KiB request limit; the relay c
 Local pair revocation tombstones are capped at4096, never evicting live protection. Exhaustion is an explicit failure. Running cleanup removes a tombstone only after its pairing credentials have been durably removed and all immutable child audit deadlines have passed. Offline configuration-only reads cannot prune revoked keys without their journal.
 
 HTTP429/503 may carry Retry-After as seconds or a canonical HTTP-date. Validate
-it, cap the wait at24hours and retain a fixed deadline per API origin. Paused
-origins make no repeated3second HTTP attempts; unrelated origins keep their own
-cadence. Once observed, a pause fences that origin for the remainder of the
-runtime cycle even if slow SDK work outlasts the deadline. The next cycle first
-reacquires controls before publication, receipt recovery or command acquisition.
+it, cap the wait at24hours and retain a fixed deadline per API origin. By default,
+paused origins make no repeated3second HTTP attempts; unrelated origins keep
+their own cadence. Only429 `daily_work_limit` with `x-moremote-budget:normal`
+and a future numeric `x-moremote-reset` consistent with Retry-After pauses normal
+requests alone. Recovery routes still require server admission; hints grant no
+authority. Missing/malformed hints, outages, disable and recovery exhaustion
+retain origin-wide fences. Once observed, a pause fences its scope for the
+remainder of the cycle even if slow SDK work outlasts the deadline. The next
+cycle first reacquires controls before publication, receipt recovery or command acquisition.
 Never reseal/renew an action or automatically repeat an uncertain mutation.
 
 A successful upload acknowledges only those exact state/receipt bytes and
@@ -27,6 +31,56 @@ revision. Lost acknowledgements retain immutable retry bytes; acknowledged
 snapshots/receipt revisions are not retransmitted each poll. Relay disappearance
 or retirement fences execution but is not authenticated endpoint revocation.
 Retired recovery ends at original child audit deadlines without extending them.
+
+## Optional activity and widget surfaces (unreleased)
+
+Published `@moxuli/moremote` remains0.1.1; these are local source changes,
+not a new release or a reason to alter service/runtime identities. There is no
+new CLI enable flag or separate activity-device command. Existing cloud opt-in,
+active pairing and a compatible phone/relay are prerequisites; official-only
+use remains independent. No deployment or device acceptance is implied.
+
+| Surface | Bound / behavior |
+| --- | --- |
+| Activity interests | Phone-selected, encrypted and pinned to pair/subscription/daemon/task; at most8 live interests per pair, original lifetime at most8h. |
+| Optional host work | Interest discovery no faster than30s; one owned2s cancellation-bounded lane, at most8 exact SDK fallback reads, each bounded250ms. Commands/controls do not await it; drain/stop cancels and joins before closing SDK/journal. |
+| Activity state | At most600s, capped by interest expiry; serialized encrypted envelope at most3000bytes, title160/hostName80 characters. APNs body at most4096bytes with512bytes reserved for static attributes. |
+| Activity renewal | Only acknowledged nonterminal state renews from a fresh official measurement with120s remaining (about8min). Unknown admissions retry identical bytes until expiry; semantic transitions can supersede progress. Missing tasks do not imply completion. |
+| Widget registration | One current WidgetKit token per pair;24h expiry, native foreground renewal around12h with a fresh registration ID. Not the alert/activity token. |
+| Widget reload | Pair-keyed meaningful-change fingerprint on existing state PUT; clocks alone do not trigger reloads. One coalesced signal per changed fingerprint/current registration; legacy envelope-only uploads do not queue pushes. |
+
+The phone registers/deletes tokens and encrypted interests; the CLI never
+registers an official daemon push token or downloads full chat/timeline for
+these surfaces. The relay sees token/environment, IDs, opaque topic/fingerprint,
+envelope times/sizes and ciphertext. Only paired endpoints decrypt task/title,
+host/project and genuine usage values. Apple receives encrypted activity state
+in `ContentState.payload`, or exactly `{aps:{"content-changed":true}}` for widgets.
+Activity/widget pushes do not depend on alert admission or presence suppression.
+
+Terminal recovery uses cached authenticated unexpired interests and fresh
+snapshot facts before optional normal discovery; it needs no normal GET/state
+upload. Only end/delete routes are recovery-eligible, not ordinary updates,
+interest reads or registration. A404/409 publication rejection invalidates that
+cached target; it does not authorize a replacement or a blind replay. Conflicting
+same-registration bytes are409; replacement needs a fresh registration ID.
+Relay retired-identity guards share a1000-entry cap and fail closed rather than
+evicting live protection; guards last through original8h activity/24h widget
+expiry. Delayed registration PUTs cannot roll back replacements; identity-exact
+widget DELETEs and stale provider results cannot retire newer registrations.
+Activity DELETE targets the subscription itself. Expiry never renews through
+retry; stale/offline is not success.
+
+The relay needs explicit `APNS_WIDGET_TOPIC` for the widget extension plus
+`.push-type.widgets`; Live Activity topic is main `APNS_TOPIC` plus
+`.push-type.liveactivity`. Environments must match configured APNs sending.
+These are relay settings, not CLI configuration keys. Default-off, global
+budgets, kill deadline and existing receipt priority remain unchanged.
+Provider signing is inside the original10s attempt deadline; after signing,
+the durable caller rechecks enabled state, active pair, exact current
+registration/publication and expiry immediately before transport.
+APNs200 is provider admission, never display/delivery proof. Physical Live
+Activity, widget reload/freshness/offline behavior and live cloud/APNs acceptance
+for this delta remain pending. Exact routes/crypto: [[specs/03-api-contract]].
 
 ## Service resources
 

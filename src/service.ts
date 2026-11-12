@@ -1,9 +1,9 @@
 import { spawn } from 'node:child_process';
 import { createHash,randomUUID } from 'node:crypto';
 import { join,dirname } from 'node:path';
-import { homedir,userInfo } from 'node:os';
+import { homedir,userInfo,tmpdir } from 'node:os';
 import { constants } from 'node:fs';
-import { mkdir,readFile,unlink,access,lstat,open,rename,link,mkdtemp,rm } from 'node:fs/promises';
+import { mkdir,readFile,unlink,access,lstat,open,rename,link,mkdtemp,rm,realpath } from 'node:fs/promises';
 import {privateDirectory,privateManagedDirectory} from './config.js';
 import {PACKAGE,exactVersion,updateLock} from './update-state.js';
 const taskName='\\MoRemoteCLI';
@@ -57,6 +57,16 @@ function xmlValue(content:string,element:string){
  const value=content.match(new RegExp('<'+element+'(?:\\s[^>]*)?>([\\s\\S]*?)</'+element+'>'))?.[1];
  return value?.replaceAll('&quot;','"').replaceAll('&apos;',"'").replaceAll('&lt;','<').replaceAll('&gt;','>').replaceAll('&amp;','&');
 }
+async function sameRegistrationPath(actual:string|undefined,expected:string){
+ if(actual===expected)return true;
+ if(!actual)return false;
+ try{
+  const [loaded,file]=await Promise.all([lstat(actual),lstat(expected)]);
+  return loaded.isFile()&&!loaded.isSymbolicLink()&&file.isFile()&&!file.isSymbolicLink()
+   &&loaded.dev===file.dev&&loaded.ino===file.ino
+   &&await realpath(actual)===await realpath(expected);
+ }catch{return false}
+}
 async function registration(def:ServiceDefinition,content:string|undefined):Promise<'registered'|'absent'>{
  if(def.platform==='darwin'){
   let raw:string;
@@ -66,12 +76,12 @@ async function registration(def:ServiceDefinition,content:string|undefined):Prom
    throw error;
   }
   const path=raw.match(/^\s*path = (.+)\s*$/m)?.[1]?.trim();
-  if(path!==def.path)throw Error('FOREIGN_SERVICE_REGISTRATION');
+  if(!await sameRegistrationPath(path,def.path))throw Error('FOREIGN_SERVICE_REGISTRATION');
  }else if(def.platform==='linux'){
   const raw=await command('systemctl',['--user','show','moremote-cli.service','--property=FragmentPath,LoadState,ActiveState'],true);
   const path=raw.match(/^FragmentPath=(.*)$/m)?.[1],load=raw.match(/^LoadState=(.*)$/m)?.[1];
   if(path===''&&load==='not-found')return 'absent';
-  if(path!==def.path)throw Error(path?'FOREIGN_SERVICE_REGISTRATION':'SERVICE_MANAGER_INVALID_RESPONSE');
+  if(!await sameRegistrationPath(path,def.path))throw Error(path?'FOREIGN_SERVICE_REGISTRATION':'SERVICE_MANAGER_INVALID_RESPONSE');
  }else if(def.platform==='win32'){
   let raw:string;
   try{raw=await command('powershell.exe',['-NoProfile','-NonInteractive','-Command',windowsQuery],true)}
@@ -99,6 +109,8 @@ async function writeDefinition(def:ServiceDefinition){
  const temp=def.path+'.'+randomUUID()+'.tmp';
  const handle=await open(temp,constants.O_CREAT|constants.O_EXCL|constants.O_WRONLY|constants.O_NOFOLLOW,0o600);
  try{
+  // Retained public runtimes read this ownership file without stripping a BOM.
+  // The native-only import below supplies the scheduler's required byte order.
   try{await handle.writeFile(def.content,def.platform==='win32'?'utf16le':'utf8');await handle.sync()}finally{await handle.close()}
   const current=await ownedFile(def);
   if(original){
@@ -112,6 +124,17 @@ async function writeDefinition(def:ServiceDefinition){
   }
  }finally{await rm(temp,{force:true})}
 }
+async function registerWindowsService(def:ServiceDefinition){
+ // Keep native import bytes outside the shared state consumed by old runtimes.
+ const temporary=await mkdtemp(join(tmpdir(),'moremote-cli-task-')),path=join(temporary,'task.xml');
+ try{
+  const handle=await open(path,constants.O_CREAT|constants.O_EXCL|constants.O_WRONLY|constants.O_NOFOLLOW,0o600);
+  try{await handle.writeFile('\uFEFF'+def.content,'utf16le');await handle.sync()}finally{await handle.close()}
+  await command('schtasks',['/Create','/TN',taskName,'/XML',path,'/F']);
+ }finally{await rm(temporary,{recursive:true,force:true})}
+ // Never leave the native-import copy present when the retained runtime starts.
+ await command('schtasks',['/Run','/TN',taskName]);
+}
 export async function installService(def:ServiceDefinition){
  const status=await serviceStatus(def);requireKnown(status);
  await access(def.entry);
@@ -121,7 +144,7 @@ export async function installService(def:ServiceDefinition){
  else if(def.platform==='linux'){
   await command('systemctl',['--user','daemon-reload']);
   await command('systemctl',['--user','enable','--now','moremote-cli.service']);
- }else {await command('schtasks',['/Create','/TN',taskName,'/XML',def.path,'/F']);await command('schtasks',['/Run','/TN',taskName])}
+ }else await registerWindowsService(def);
 }
 export async function stopService(def:ServiceDefinition){
  const status=await serviceStatus(def);requireKnown(status);

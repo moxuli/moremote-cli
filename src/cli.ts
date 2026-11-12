@@ -12,8 +12,7 @@ import { runRuntime } from './runtime.js';
 import { requestControl } from './control.js';
 import { currentDefinition,installService,removeService,stopService,serviceStatus,type ServiceDefinition } from './service.js';
 import {ensureManaged,packageManaged,packageVersion,queueUpdate,setAutoUpdate,readUpdateState,serviceEntry} from './updater.js';
-import {runSupervisor} from './supervisor.js';
-import {requestSupervisorStop,supervisorRunning} from './update-state.js';
+import {runSupervisor,stopManagedRuntime} from './supervisor.js';
 import {OperationJournal} from './journal.js';
 const VERSION=await packageVersion();
 const HELP=`MoRemote CLI ${VERSION} — optional Paseo 0.15.3 enhancement
@@ -40,14 +39,7 @@ const supportedNode=Number(process.versions.node.split('.')[0])===24&&Number(pro
 const parsed=(()=>{try{return parseArgs({args:versionOnly?[]:process.argv.slice(2),allowPositionals:true,options:{help:{type:'boolean'},version:{type:'string'},'data-dir':{type:'string'},target:{type:'string'},'paseo-home':{type:'string'},'api-origin':{type:'string'},'cloud-on':{type:'boolean'},'allow-loopback-http':{type:'boolean'},connect:{type:'boolean'},json:{type:'boolean'},yes:{type:'boolean'},purge:{type:'boolean'},enable:{type:'boolean'},disable:{type:'boolean'},'pair-id':{type:'string'}}})}catch{console.error('INVALID_ARGUMENTS');process.exit(1)}})();
 const args=parsed.values;const action=parsed.positionals[0];
 async function stopped(dir:string){if(await requestControl(dir,'status'))throw Error('STOP_CLI_BEFORE_CONFIGURATION')}
-async function stopRuntime(dir:string){if(!await requestControl(dir,'stop'))return;for(let i=0;i<300;i++){await sleep(200);if(!await requestControl(dir,'status'))return}throw Error('STOP_TIMEOUT')}
-async function stopManaged(dir:string){
- requestSupervisorStop(dir);let legacyUnavailable=false;
- try{await stopRuntime(dir)}catch(error){if(error instanceof Error&&error.message==='LEGACY_WINDOWS_CONTROL_UNAVAILABLE'&&readUpdateState(dir))legacyUnavailable=true;else throw error}
- if(readUpdateState(dir))for(let i=0;i<900;i++){if(!supervisorRunning(dir)){if(legacyUnavailable&&await requestControl(dir,'status'))throw Error('STOP_TIMEOUT');return}await sleep(200)}
- if(readUpdateState(dir)&&supervisorRunning(dir))throw Error('SUPERVISOR_STOP_TIMEOUT');
-}
-async function stopOwned(dir:string,definition:ServiceDefinition){await stopService(definition);await stopManaged(dir)}
+async function stopOwned(dir:string,definition:ServiceDefinition){await stopService(definition);await stopManagedRuntime(dir)}
 async function main(){
  if(args.help||!action){console.log(HELP);return}if(action==='version'){console.log(VERSION);return}
  if(action!=='check'&&!supportedNode)throw Error('NODE_24_13_REQUIRED');
@@ -66,7 +58,7 @@ async function main(){
  if(action==='service-install'){if(!args.yes)throw Error('EXPLICIT_YES_REQUIRED');await stopped(dir);await saveConfig(dir,config);await installService(currentDefinition(await serviceEntry(dir),dir));console.log('MoRemote CLI per-user managed login registration installed; automatic updates enabled unless opted out. Official service unchanged.');return}
  if(action==='auto-update'){if(!!args.enable===!!args.disable)throw Error('SELECT_ENABLE_OR_DISABLE');console.log(JSON.stringify(await setAutoUpdate(dir,!!args.enable)));return}
  if(action==='update'){if(!args.yes||!args.version)throw Error('EXACT_VERSION_AND_YES_REQUIRED');const state=await queueUpdate(dir,args.version);console.log(JSON.stringify({installedVersion:args.version,activeVersion:state.active,activation:state.pending?'queued-for-supervisor-safe-boundary':'already-active',next:state.pending?'A running managed supervisor activates automatically; otherwise start run or service-install --yes.':null}));return}
- if(action==='uninstall'){if(!args.yes)throw Error('EXPLICIT_YES_REQUIRED');try{await assertOwnedDirectory(dir)}catch(error){if((error as NodeJS.ErrnoException).code!=='ENOENT')throw error}await removeService(definition);await stopManaged(dir);if(!args.purge)await saveConfig(dir,config);await rm(join(dir,'managed'),{recursive:true,force:true});if(args.purge)await rm(dir,{recursive:true,force:true});console.log(args.purge?'MoRemote CLI-owned registration, managed install and local keys/journal removed. Official data unchanged.':'MoRemote CLI registration and managed install removed; local pairing keys/journal retained. Source checkout/global package removal remains with its package manager.');return}
+ if(action==='uninstall'){if(!args.yes)throw Error('EXPLICIT_YES_REQUIRED');try{await assertOwnedDirectory(dir)}catch(error){if((error as NodeJS.ErrnoException).code!=='ENOENT')throw error}await removeService(definition);await stopManagedRuntime(dir);if(!args.purge)await saveConfig(dir,config);await rm(join(dir,'managed'),{recursive:true,force:true});if(args.purge)await rm(dir,{recursive:true,force:true});console.log(args.purge?'MoRemote CLI-owned registration, managed install and local keys/journal removed. Official data unchanged.':'MoRemote CLI registration and managed install removed; local pairing keys/journal retained. Source checkout/global package removal remains with its package manager.');return}
  throw Error('UNKNOWN_COMMAND');
 }
 if(process.argv.includes('--version')&&!action){console.log(VERSION)}else main().catch(error=>{const code=error instanceof Error&&/^[A-Z0-9_]+$/.test(error.message)?error.message:'CLI_COMMAND_FAILED';console.error(code);process.exitCode=1});

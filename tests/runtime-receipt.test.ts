@@ -12,7 +12,7 @@ import {WebSocketServer} from 'ws';
 import {wrapSessionMessage} from '@getpaseo/protocol/messages';
 import {saveConfig,loadConfig} from '../src/config.ts';
 import {OperationJournal} from '../src/journal.ts';
-import {sealEnvelope,openEnvelope,type Envelope} from '../src/crypto.ts';
+import {sealEnvelope,openEnvelope,presenceTopic,type Envelope} from '../src/crypto.ts';
 import {requestControl,controlEndpoint} from '../src/control.ts';
 
 const pairId='11111111-1111-4111-8111-111111111111',id='22222222-2222-4222-8222-222222222222',day=86400000;
@@ -22,12 +22,17 @@ const pairId='11111111-1111-4111-8111-111111111111',id='22222222-2222-4222-8222-
 async function until(predicate:()=>boolean|Promise<boolean>,message:string,ms=12000){const end=performance.now()+ms;while(performance.now()<end){if(await predicate())return;await sleep(30)}throw Error(message)}
 async function bounded<T>(promise:Promise<T>,ms:number,message:string){const deadline=Promise.withResolvers<never>();const timer=setTimeout(()=>deadline.reject(Error(message)),ms);timer.unref();try{return await Promise.race([promise,deadline.promise])}finally{clearTimeout(timer)}}
 async function body(req:IncomingMessage){let value='';for await(const chunk of req)value+=chunk;return value?JSON.parse(value):null}
-async function fixture(options:{receiptFailure?:boolean;stateLosses?:number;retired?:boolean;missing?:boolean;transient?:boolean;stallSnapshot?:boolean;snapshotDelayMs?:number;seedReceipt?:boolean;pause?:{path:'controls'|'state'|'receipt';status:429|503;seconds:number}}={}){
+async function fixture(options:{stallActivities?:boolean;activityInterests?:number;receiptFailure?:boolean;stateLosses?:number;retired?:boolean;missing?:boolean;transient?:boolean;stallSnapshot?:boolean;snapshotDelayMs?:number;seedReceipt?:boolean;pause?:{path:'controls'|'state'|'receipt';status:429|503;seconds:number}}={}){
  // A short private fixture root avoids Darwin's sockaddr_un limit even when TMPDIR is long.
  // Production socket placement/ownership checks remain unchanged.
  const root=await mkdtemp(join(process.platform==='win32'?tmpdir():'/tmp','mrr-')),dir=join(root,'c');
  const daemon=new WebSocketServer({host:'127.0.0.1',port:0});await once(daemon,'listening');const daemonAddress=daemon.address();assert.ok(daemonAddress&&typeof daemonAddress!=='string');
  const counts={controls:0,commands:0,pair:0,receipts:0,attention:0,snapshots:0,mutations:0};const states:string[]=[];const controlsAt:number[]=[];const requests:{path:string;method:string;at:number;body:unknown}[]=[];let pauseAt=0;let child:ChildProcess|undefined;let exited:Promise<unknown>|undefined;
+ const interestTime=Date.now(),subscriptions=await Promise.all(Array.from({length:options.activityInterests??0},async(_,index)=>{
+  const suffix=index.toString(16).padStart(12,'0'),subscriptionId='aaaaaaaa-aaaa-4aaa-8aaa-'+suffix,agentId='absent-'+index;
+  return {id:subscriptionId,registrationId:'bbbbbbbb-bbbb-4bbb-8bbb-'+suffix,topic:await presenceTopic(Buffer.alloc(32,7),pairId,agentId),expiresAt:interestTime+8*3600000,
+   interest:await sealEnvelope(Buffer.alloc(32,7),{version:1,pairId,id:subscriptionId,channel:'activityInterest',issuedAt:interestTime,expiresAt:interestTime+8*3600000},{version:1,subscriptionId,daemonServerId:'d',agentId})};
+ }));
  const relay=createServer(async(req,res)=>{const path=req.url||'';const value=await body(req);requests.push({path,method:req.method||'',at:performance.now(),body:value});res.setHeader('Content-Type','application/json');const fail=(code:string,http=409)=>{res.writeHead(http);res.end(JSON.stringify({ok:false,error:{code,message:'Synthetic fixture failure'}}))};
   if(options.pause&&!pauseAt&&path.endsWith('/'+options.pause.path)){pauseAt=performance.now();res.setHeader('Retry-After',String(options.pause.seconds));return fail('cost_guard_closed',options.pause.status)}
   if(path.endsWith('/controls')){counts.controls++;controlsAt.push(performance.now());if(options.missing)return fail('pair_not_found',404);if(options.transient)return fail('temporarily_unavailable',503);return res.end(JSON.stringify({ok:true,controls:[]}))}
@@ -35,6 +40,7 @@ async function fixture(options:{receiptFailure?:boolean;stateLosses?:number;reti
   if(path.endsWith('/commands')){counts.commands++;if(options.retired)return fail('pair_not_active');return res.end(JSON.stringify({ok:true,commands:[],hasMore:false}))}
   if(path.endsWith('/state')){states.push(JSON.stringify(value.envelope));if(options.retired)return fail('pair_not_active');if(states.length<=(options.stateLosses||0)){res.destroy();return}return res.end(JSON.stringify({ok:true}))}
   if(path.endsWith('/attention')){counts.attention++;return res.end(JSON.stringify({ok:true}))}
+  if(path.endsWith('/activities')){if(options.retired)return fail('pair_not_active');if(options.stallActivities)return;return res.end(JSON.stringify({ok:true,subscriptions}))}
   counts.pair++;if(options.missing)return fail('pair_not_found',404);res.end(JSON.stringify({ok:true,pair:{state:options.retired?'revoked':'active',pendingClaim:null,activationProof:null}}));
  });relay.listen(0,'127.0.0.1');await once(relay,'listening');const relayAddress=relay.address();assert.ok(relayAddress&&typeof relayAddress!=='string');
  daemon.on('connection',socket=>{const reply=(message:unknown)=>socket.send(JSON.stringify(wrapSessionMessage(message)));socket.on('message',data=>{const f=JSON.parse(data.toString());if(f.type==='hello')reply({type:'status',payload:{status:'server_info',serverId:'d',hostname:'Synthetic',features:{explicitEventSubscriptions:true,ownedSubscriptions:true}}});else if(f.type==='ping')socket.send(JSON.stringify({type:'pong'}));else if(f.type==='session'){const m=f.message;if(m.type==='session.events.set_subscription.request')reply({type:'session.events.set_subscription.response',payload:{requestId:m.requestId,subscriptionId:'s'}});else if(m.type==='fetch_agents_request'){counts.snapshots++;if(!options.stallSnapshot)void sleep(options.snapshotDelayMs||0,undefined,{ref:false}).then(()=>{if(socket.readyState===1)reply({type:'fetch_agents_response',payload:{requestId:m.requestId,entries:[],pageInfo:{nextCursor:null,prevCursor:null,hasMore:false}}})})}else if(m.type==='subscription.release.request')reply({type:'subscription.release.response',payload:{requestId:m.requestId}});else if(m.type==='send_agent_message_request'||m.type==='agent_permission_response')counts.mutations++}})});
@@ -99,5 +105,36 @@ test('parent update drain completes the actual in-flight cycle and releases jour
   assert.equal(f.counts.commands,1,'drain must finish acquisition in its existing cycle, not cancel the SDK await or enter another cycle');
   assert.equal(f.states.length,1);assert.equal(f.counts.mutations,0);assert.equal(await requestControl(f.dir,'status'),null);
   const journal=new OperationJournal(join(f.dir,'journal.sqlite'));try{assert.equal(journal.get(pairId,id)?.state,'accepted')}finally{journal.close()}
+ }finally{await f.close()}
+});
+
+test('actual runtime polls activity interests only on snapshot cadence and emits stable keyed widget fingerprints without official mutations',{timeout:15000},async()=>{
+ const f=await fixture();try{
+  f.start();await until(()=>f.counts.commands>=2,'INITIAL_CADENCE_NOT_REACHED');
+  const first=f.requests.filter(request=>request.path.endsWith('/activities'));assert.equal(first.length,1);assert.equal(first[0].method,'GET');
+  const stateRequests=f.requests.filter(request=>request.path.endsWith('/state'));
+  assert.ok(stateRequests.length);const stateBody=stateRequests[0].body;
+  assert.ok(stateBody&&typeof stateBody==='object'&&'widgetFingerprint' in stateBody);
+  assert.match(String(stateBody.widgetFingerprint),/^[A-Za-z0-9_-]{43}$/);
+  f.advance(31000);await until(()=>f.requests.filter(request=>request.path.endsWith('/activities')).length===2,'SNAPSHOT_INTEREST_REFRESH_NOT_REACHED');
+  const refreshed=f.requests.filter(request=>request.path.endsWith('/state')).at(-1)?.body;
+  assert.ok(refreshed&&typeof refreshed==='object'&&'widgetFingerprint' in refreshed);
+  assert.equal(refreshed.widgetFingerprint,stateBody.widgetFingerprint,'measurement-only state changes must not trigger widget push');
+  assert.equal(f.counts.mutations,0);
+ }finally{await f.close()}
+});
+
+for(const options of [{stallActivities:true},{activityInterests:8}])test(`stalled optional activity work cannot delay real command/control acquisition: ${JSON.stringify(options)}`,{timeout:12000},async()=>{
+ const f=await fixture(options);try{
+  f.start();await until(()=>f.counts.commands>=3,'ACTIVITY_WORK_BLOCKED_COMMANDS',10000);
+  assert.ok(f.controlsAt[2]-f.controlsAt[0]<8000,'optional activity work must not lengthen the critical three-second cadence');
+  assert.equal(f.counts.mutations,0);
+ }finally{await f.close()}
+});
+test('drain aborts and joins an outstanding optional activity request without waiting its twenty-second timeout',{timeout:6000},async()=>{
+ const f=await fixture({stallActivities:true});try{
+  f.start();await until(()=>f.requests.some(request=>request.path.endsWith('/activities'))&&f.counts.commands===1,'OPTIONAL_REQUEST_NOT_IN_FLIGHT',3000);
+  const started=performance.now();f.drain();await until(()=>!f.alive(),'OPTIONAL_REQUEST_BLOCKED_DRAIN',1500);
+  assert.ok(performance.now()-started<1500);assert.equal(f.counts.mutations,0);
  }finally{await f.close()}
 });

@@ -1,8 +1,155 @@
-# Current state — 2026-11-10
+# Current state — 2026-11-12
 
 ## Scope
 
-Owner-approved notification/scoped-delivery first iteration; Apache-2.0. Standalone Node24 companion targeting inspected official SDK/protocol 0.15.3. Existing iOS protocol-vector floor is independent and unchanged. OpenUI, system extensions and broader native surfaces belong to later app iterations.
+Owner-approved notification/scoped delivery and local activity/widget integration; Apache-2.0. Standalone Node24 companion targeting inspected official SDK/protocol0.15.3. Existing iOS protocol-vector floor is independent and unchanged. OpenUI and broader system extensions remain outside this scope.
+
+## Native service acceptance — 2026-11-12
+
+- Actual Ubuntu26.04/Node24.13.0/systemd259 user-service acceptance passes:
+  install/start, authenticated status, QA0.1.1 → synthetic9000.0.2 activation,
+  failed9000.0.3 startup rollback, normal stop/uninstall and independent absence
+  of the unit, definition and live runtime. No cloud or real official daemon I/O.
+- Initial Windows QA exposed missing native-import BOM and current-reader BOM
+  handling. Fresh-context specification review then found that persisting a BOM
+  breaks unchanged public0.1.1 runtimes, despite the current/current QA success.
+- The current installer keeps persistent ownership XML BOM-free. Only a private
+  transient import outside shared state has a BOM; it is removed before `/Run`
+  and on `/Create` failure. Retained0.1.1 consumers remain usable for bootstrap
+  and rollback without a storage migration.
+- Both new consumer regressions first failed. All20focused lifecycle/resource
+  consumers, typecheck and build then pass. The frozen reader matches the
+  independently downloaded public0.1.1 module bytes.
+- The new actual Windows Task Scheduler journey passes in183.86seconds:
+  unchanged registry0.1.1 bootstrap → current synthetic9000.0.2 → deliberately
+  failed9000.0.3 → recovered9000.0.2, then normal stop/uninstall. Task,
+  definition, control endpoint and live supervisor/runtime are independently absent.
+- Fresh-context specification and quality re-review close the scoped blocker.
+  This is the explicitly weaker same-provider fallback, not cross-vendor approval.
+  Earlier168.23second QA acceptance and unavailable provider reviews remain
+  historical evidence in [[2026-11-11-native-service-acceptance]].
+- The candidate is unpublished QA bytes, not a public-to-public release. No real
+  official host, paid provider, cloud operation or everyday login service is used.
+- The shared production cloud remains persistently enabled under the owner's
+  later decision; these isolated native tests neither use nor disable it. Older
+  temporary-window shutdown receipts below are historical, not current policy.
+
+## Local0.1.2 candidate preparation
+
+- Package and lock root identities now select0.1.2; no dependency or compatibility
+  tuple changes. No tag, push, npm publication or GitHub Release has occurred.
+- The combined check passes typecheck and180/181 tests. Its remaining legacy-wire
+  case incorrectly requires an extra read for an old event that may be coalesced.
+  The test now drains the actual wire and retains the phone-visible no-new-notice
+  and unchanged-ciphertext assertions without demanding that incidental RPC.
+- Both actual SDK wire variants then pass2/2. Build, real packaged activation/
+  failed-start rollback/aliased frontend/clean stop, release identity validation
+  and deterministic0.1.2 packaging pass. These overlapping runs are not a new
+  single green full-suite result.
+- Hosted cross-platform CI, exact immutable publication/receiver installation
+  and public-to-public activation remain release gates. Production device reply,
+  approval and remote activity/widget delivery still require their own evidence.
+
+## Active work — unreleased activity/widget integration
+
+- Published install identity is **`@moxuli/moremote`0.1.1**; command/runtime
+  remains `moremote-cli`, with existing per-platform service identities.
+  Local activity/widget changes are **not released**; local0.1.2 is a candidate.
+- Implemented locally: authenticated encrypted per-task interests and activity
+  state, an owned optional2s host lane with250ms exact fallback reads, meaningful
+  keyed widget fingerprints on existing snapshot publication, and normal-only
+  quota pauses that preserve eligible terminal recovery. Commands/controls do
+  not await activity work; shutdown/drain joins it before SDK/journal close.
+- Limits/expiry/error/dataflow truth lives in [[configuration]] and
+  [[specs/03-api-contract#Opt-in task activities and widget reloads]].
+  Interest expiry is at most8h (8 per pair); state at most600s, fresh acknowledged
+  renewal around8min. Unknown admissions retain exact bytes. Widget registration
+  expires24h with native renewal around12h. Missing tasks never imply finish.
+- Integration-owner-reported evidence: CLI typecheck and57 tests across
+  `tests/activity.test.ts`, `tests/cloud-retry.test.ts` and
+  `tests/runtime-receipt.test.ts` passed. This is targeted local evidence, not
+  a newly green full suite, released artifact, or physical/device acceptance.
+- Next gates: independent integration review and owner verification of the final
+  delta; authorized native Live Activity/widget rendering, stale/offline and
+  token replacement/expiry acceptance; separately authorized live cloud/APNs
+  delivery. APNs200 is provider admission, not delivery. Historical alert proof
+  below does not cover either new surface.
+- A later owner-approved bounded physical acceptance observed all four attention
+  kinds through the actual official mock → companion → cloud → sandbox APNs path.
+  Duplicate completion and premature request-resolution bugs were exposed and
+  corrected locally; this is not real paid-model or production-service evidence.
+- The request lifecycle and canonical terminal-identity corrections pass13focused
+  consumers plus typecheck. A later reverse-order wire regression first failed
+  both SDK variants, then both passed with typecheck after observation-order
+  fencing. Independent same-provider review reports no blocker; the preferred
+  cross-vendor provider was unavailable.
+- Earlier bounded sandbox windows restored disabled service and production
+  provider secrets. The later November12 owner decision now keeps the existing
+  production service enabled; no temporary watchdog or sandbox swap is allowed.
+  Genuine device reply/approval receipts and remote ActivityKit/WidgetKit
+  acceptance remain open. No real-work session or new release is implied.
+- Fresh local end-to-end action acceptance passes against the unchanged official
+  development mock, production runtime, real Pages/Worker/SQLite and a compiled
+  unchanged native Kit/CryptoKit slice. Exact send and bound plan denial each
+  execute once and produce authenticated accepted/resolved receipts; initial and
+  post-settlement identical retries cannot redispatch or change receipts. Both
+  SQLite journals retain exactly two settled operations. This is not physical
+  locked-notification UI or whole native-package acceptance. Earlier observer and
+  incidental-prose harness failures were corrected without product exceptions.
+
+## Native macOS service continuation — partial acceptance
+
+The current compiled source controller passed real launchd install/start/status/
+stop/uninstall against the published0.1.1 managed runtime in an unused, isolated
+per-user registration. A concurrent graceful-drain control-closure failure was
+reproduced and corrected with an authoritative ownership-retirement barrier.
+22 focused shutdown/frontend/control/CLI regressions, typecheck and build pass.
+The final registration, plist and owned state were removed; cloud stayed disabled
+and no official connection or real-work session was used.
+
+See [native service evidence](plans/2026-11-11-native-service-acceptance.md).
+Independent review closed a reproduced replacement-owner race with fresh post-probe
+supervisor/runtime liveness checks. The November12 continuation below additionally
+accepts native macOS upgrade/rollback with a real published bootstrap and synthetic
+candidates. The November12 native Linux/Windows gates also pass as recorded above;
+a next immutable public release and public-to-public delivery remain open.
+Published0.1.1 does not contain the later source corrections.
+
+## Packaged rollback continuation — 2026-11-12
+
+The local macOS packaged smoke now exercises production `queueUpdate` and the
+retained supervisor with three real npm-installed synthetic package versions:
+9000.0.1→9000.0.2 succeeds; compatible9000.0.3 exits before runtime readiness,
+and the supervisor returns to9000.0.2. Authenticated status confirms the recovered
+version. Bootstrap/previous remain9000.0.1, failed9000.0.3 is recorded, and
+pending/activating are absent. The retained aliased frontend and final clean
+shutdown also pass. Only disposable failed-candidate package bytes are altered.
+
+`npm run build` passes. The first expanded smoke stops during fixture setup
+because its new import accidentally omitted `managedEntry`; no supervisor starts.
+After restoring that import, the exact smoke passes in133.54seconds, including
+owned-process/file cleanup. This is not a newly green full unit suite or new
+hosted-platform result. That smoke installs no native login service and changes no
+official daemon, cloud, real session or public package. The separate installed
+macOS journey is recorded below; Linux/Windows observations remain open.
+
+## Installed macOS upgrade continuation — 2026-11-12
+
+An actual launchd test exposes raw-path ownership rejection after macOS resolves
+`/tmp` to `/private/tmp`. Canonical parent aliases now require ordinary leaves,
+equal device/inode and equal real paths; leaf symlinks and foreign files remain
+rejected. All10service-lifecycle consumers, typecheck and build pass; independent
+OpenCode review finds no blocker. Distinct hard links/bind mounts remain refused.
+
+The real installed-service journey passes in181.29seconds: verified public0.1.1
+bootstrap, current9000.0.2 synthetic activation, failed9000.0.3 startup, recovery
+to9000.0.2, then normal stop/uninstall with registration/plist/owned successful-run
+files removed. An earlier fixture missed the required client-ID prefix; that
+`INVALID_CONFIG` startup failure is not a product defect. First-run cleanup safely
+used its independently established canonical definition before the product fix.
+No real official connection or cloud operation occurred. Details and remaining
+public-release/platform limits: [native service evidence](plans/2026-11-11-native-service-acceptance.md).
+
 
 ## Approved identity cutover — locally verified
 
@@ -10,9 +157,10 @@ The owner approved the complete rename to **MoRemote CLI** on 2026-11-10:
 repository/command `moremote-cli`, current public npm `@moxuli/moremote`, entry `bin/moremote-cli.js`,
 `MOREMOTE_CLI_HOME`, state `MoRemoteCLI` on macOS/Windows and `moremote-cli`
 on Linux, and services `com.moremote.cli` / `moremote-cli.service` / `MoRemoteCLI`.
-Ownership/runtime/client/managed-package identities move together. There is no
-released package or installed service to migrate: no compatibility aliases or
-automatic adoption of old state. Foreign-resource protections remain strict.
+Ownership/runtime/client/managed-package identities move together.
+At the original rename checkpoint there was no released package or installed
+service to migrate: no compatibility aliases or automatic adoption of old state.
+The later0.1.0/0.1.1 publications are recorded below. Foreign-resource protections remain strict.
 The `companionHello` role, crypto salt/envelope schema, APNs categories and
 app/Keychain identities are unchanged.
 
@@ -164,8 +312,8 @@ Official tag v0.15.3 points to commit d91ae138cb931447635e94296023414a58bedcc5. 
 
 - Independent specification and quality/security reviews and frozen local check results belong to the integration owner.
 - Hosted cross-platform CI, exactv0.1.1 tag, npm publication, signed provenance and GitHub assets are verified above. Environment deployment is `v*`-tag-only. No broader branch/tag Ruleset or trusted-publisher migration is claimed.
-- Real per-user launchd/systemd/Windows logon-task installation requires point-of-use operator authorization and testing on each OS; adapters are source, not evidence of another OS’s acceptance.
-- No everyday login service, real-work-session send/approval or paid-model task was exercised. Native service-manager installation still needs explicit per-platform operator acceptance.
+- The native macOS/Linux/Windows managers now have the scoped acceptance recorded above. Public-to-public next-version activation and corresponding published-version rollback still require their own release evidence; synthetic QA versions are not that proof.
+- No everyday login service, real-work-session send/approval or paid-model task was exercised. The temporary macOS registration was removed; it is not daily-host deployment.
 - One authorized synthetic sandbox alert was observed on a real iPad through the independent cloud/app path. This is not genuine permission/reply execution, production TestFlight delivery or terminated-app acceptance; emulation and artifact installation do not establish those gates.
 
 Continue from this file and living specs, not private machine history. Record exercised evidence here before claiming a verified release.

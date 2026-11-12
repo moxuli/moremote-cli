@@ -1,9 +1,10 @@
 # Documentation index
 
 **MoRemote CLI**: independent optional `moremote-cli` repository/command,
-public npm `@moxuli/moremote`, over unmodified Paseo.
-STATE distinguishes historical pre-rename acceptance, renamed-tree checks and
-separately gated cloud/Apple activation.
+public npm `@moxuli/moremote`0.1.1, over unmodified Paseo.
+Activity/widget support is local unreleased source, not part of that published
+package. [[STATE]] separates targeted local evidence from native/device/live
+cloud acceptance, which remains pending for these new surfaces; cloud is disabled.
 
 - [Current state and external gates](STATE.md)
 - [Architecture](specs/01-architecture.md)

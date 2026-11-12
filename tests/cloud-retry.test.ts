@@ -42,3 +42,21 @@ test('origin cycle fences survive deadline expiry across clients, without blocki
   const nextCycle=new CloudClient(paused.client.origin,pairId,'synthetic',true,fetch,undefined,retryState,{});await assert.rejects(nextCycle.controls());assert.equal(paused.calls(),2,'only the next explicit control acquisition may resume HTTP after expiry');
  }finally{Date.now=original;await paused.close();await other.close()}
 });
+test('explicit normal-budget rejection pauses normal work but preserves recovery admission and original global-outage fences',async()=>{
+ const calls:string[]=[];const reset=Date.now()+60000;
+ const fetcher:typeof fetch=async(input)=>{const path=new URL(String(input)).pathname;calls.push(path);if(path.endsWith('/state'))return Response.json({ok:false,error:{code:'daily_work_limit'}},{status:429,headers:{'retry-after':'60','x-moremote-budget':'normal','x-moremote-reset':String(reset)}});return Response.json({ok:true,controls:[]})};
+ const retryState={},cycleFence={};const client=new CloudClient('http://localhost:18787',pairId,'synthetic',true,fetcher,undefined,retryState,cycleFence);
+ await assert.rejects(client.request('PUT','/pairs/'+pairId+'/state',{}));
+ await client.controls();await client.request('PUT','/pairs/'+pairId+'/activities/22222222-2222-4222-8222-222222222222/end',{});
+ await assert.rejects(client.commands());assert.equal(calls.length,3);
+});
+for(const invalid of [
+ {status:503,budget:'normal',reset:true,code:'daily_work_limit'},
+ {status:429,budget:'normal',reset:false,code:'daily_work_limit'},
+ {status:429,budget:'normal',reset:true,code:'service_disabled'},
+ {status:429,budget:'recovery',reset:true,code:'daily_work_limit'},
+])test(`untrusted or origin-wide rejection cannot unlock terminal recovery: ${JSON.stringify(invalid)}`,async()=>{
+ let calls=0;const fetcher:typeof fetch=async()=>{calls++;return Response.json({ok:false,error:{code:invalid.code}},{status:invalid.status,headers:{'retry-after':'60','x-moremote-budget':invalid.budget,...(invalid.reset?{'x-moremote-reset':String(Date.now()+60000)}:{})}})};
+ const client=new CloudClient('http://localhost:18787',pairId,'synthetic',true,fetcher,undefined,{},{});
+ await assert.rejects(client.commands());await assert.rejects(client.controls());assert.equal(calls,1);
+});

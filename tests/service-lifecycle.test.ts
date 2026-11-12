@@ -2,10 +2,12 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
 import { mkdtemp,mkdir,writeFile,readFile,chmod,rm,symlink,lstat } from 'node:fs/promises';
-import { join,dirname } from 'node:path';
+import { join,dirname,relative } from 'node:path';
 import { tmpdir } from 'node:os';
 import { installService,managedEntry,removeService,serviceDefinition,serviceStatus,stopService,updatePackage } from '../src/service.ts';
 import type { ServiceDefinition } from '../src/service.ts';
+import { assertTaskResource } from '../src/resources.ts';
+import { assertTaskResource as retainedTaskResource } from './fixtures/published-0.1.1-resources.mjs';
 
 const platforms=['darwin','linux','win32'];
 const executableFixtures={skip:process.platform==='win32'?'POSIX executable manager fixtures; Windows task adapter is exercised on POSIX without native registration':false};
@@ -30,6 +32,12 @@ if(program==='launchctl'&&args[0]==='print'){
  if(!state.registered)process.exit(3);
  console.log(state.content);
 }else{
+ if(program==='schtasks'&&args.includes('/Create')){
+  state.importPath=args[args.indexOf('/XML')+1];
+  state.importBytes=fs.readFileSync(state.importPath).toString('base64');
+  if(state.createError){fs.writeFileSync(process.env.SERVICE_FIXTURE,JSON.stringify(state));process.exit(1)}
+ }
+ if(program==='schtasks'&&args.includes('/Run'))state.importPresentAtRun=fs.existsSync(state.importPath);
  if(args.includes('bootstrap')||args.includes('enable')||args.includes('/Create')){state.registered=true;state.active=true}
  if(args.includes('bootout'))state.registered=false;
  if(args.includes('stop')||args.includes('/End'))state.active=false;
@@ -39,9 +47,9 @@ if(program==='launchctl'&&args[0]==='print'){
 `;
  for(const program of ['launchctl','systemctl','powershell.exe','schtasks']){const file=join(bin,program);await writeFile(file,script);await chmod(file,0o700)}
  const entry=join(dir,'moremote-cli.js');await writeFile(entry,'console.log("synthetic CLI");\n');
- async function select(platform:string,registered=false,options:{error?:boolean;path?:string;content?:string}={}){
+ async function select(platform:string,registered=false,options:{error?:boolean;createError?:boolean;path?:string;content?:string}={}){
   const def=serviceDefinition(platform,home,process.execPath,entry,data);
-  await writeFile(state,JSON.stringify({registered,active:registered,path:options.path??def.path,content:options.content??def.content,error:options.error??false}));
+  await writeFile(state,JSON.stringify({registered,active:registered,path:options.path??def.path,content:options.content??def.content,error:options.error??false,createError:options.createError??false}));
   return def;
  }
  async function commands(){try{return (await readFile(log,'utf8')).trim().split('\n').filter(Boolean).map(line=>JSON.parse(line))}catch(error){if(error instanceof Error&&'code' in error&&error.code==='ENOENT')return [];throw error}}
@@ -77,11 +85,44 @@ test('confirmed absence differs from unavailable manager and native lifecycle us
  const f=await fixture();try{for(const platform of platforms){
   const def=await f.select(platform);assert.deepEqual(await serviceStatus(def),{owned:false,registration:'absent'});
   await installService(def);assert.equal((await serviceStatus(def)).registration,'registered');
+  if(platform==='win32'){
+   const bytes=await readFile(def.path);
+   assert.equal(bytes.toString('utf16le'),def.content);
+   assertTaskResource(f.data,'win32');
+  }
   await stopService(def);await removeService(def);await assert.rejects(lstat(def.path),{code:'ENOENT'});
  }
  const calls=await f.commands();assert.ok(calls.some(c=>c.program==='launchctl'&&c.args[0]==='bootstrap'));
  assert.ok(calls.some(c=>c.program==='systemctl'&&JSON.stringify(c.args)===JSON.stringify(['--user','enable','--now','moremote-cli.service'])));
  assert.ok(calls.some(c=>c.program==='schtasks'&&c.args.includes('/XML')&&c.args.includes('/Create')));
+ }finally{await f.close()}
+});
+
+// Unchanged package/dist/resources.js from public @moxuli/moremote@0.1.1.
+// SHA256: 1ee80f6bdab819e15da817038cecf46133b07d1a157663893a64112a2fdca13b
+test('Windows native registration preserves unchanged public 0.1.1 reader compatibility',executableFixtures,async()=>{
+ const f=await fixture();try{
+  const def=await f.select('win32');
+  await installService(def);
+  retainedTaskResource(f.data,'win32');
+  const manager=JSON.parse(await readFile(f.state,'utf8'));
+  const imported=Buffer.from(manager.importBytes,'base64');
+  assert.equal(imported.toString('utf16le'),'\uFEFF'+def.content);
+  assert.notEqual(dirname(manager.importPath),f.data);
+  assert.equal(manager.importPresentAtRun,false,'The transient native-import copy must be removed before runtime startup.');
+  await assert.rejects(lstat(manager.importPath),{code:'ENOENT'});
+  await stopService(def);await removeService(def);
+ }finally{await f.close()}
+});
+
+test('failed Windows registration removes its import copy without starting a runtime',executableFixtures,async()=>{
+ const f=await fixture();try{
+  const def=await f.select('win32',false,{createError:true});
+  await assert.rejects(installService(def),/COMMAND_FAILED_schtasks/);
+  const manager=JSON.parse(await readFile(f.state,'utf8'));
+  await assert.rejects(lstat(manager.importPath),{code:'ENOENT'});
+  retainedTaskResource(f.data,'win32');
+  assert.equal((await f.commands()).some(call=>call.program==='schtasks'&&call.args.includes('/Run')),false);
  }finally{await f.close()}
 });
 
@@ -91,6 +132,30 @@ test('foreign manager registration cannot be stopped, removed or overwritten',ex
   await assert.rejects(stopService(def),/FOREIGN_SERVICE_REGISTRATION/);await assert.rejects(removeService(def),/FOREIGN_SERVICE_REGISTRATION/);await assert.rejects(installService(def),/FOREIGN_SERVICE_REGISTRATION/);
   assert.equal(await readFile(def.path,def.platform==='win32'?'utf16le':'utf8'),def.content);
  }
+ }finally{await f.close()}
+});
+
+test('canonical parent aliases retain exact owned native service management',executableFixtures,async()=>{
+ const f=await fixture();try{for(const platform of ['darwin','linux']){
+  const alias=join(f.dir,'home-alias-'+platform);await symlink(f.home,alias,'dir');
+  const original=await f.select(platform);
+  const reported=join(alias,relative(f.home,original.path));
+  const def=await f.select(platform,true,{path:reported});await writeDefinition(def);
+  assert.deepEqual(await serviceStatus(def),{owned:true,registration:'registered'});
+  await stopService(def);await removeService(def);await assert.rejects(lstat(def.path),{code:'ENOENT'});
+ }}finally{await f.close()}
+});
+
+test('a manager-reported leaf symlink never grants native service authority',executableFixtures,async()=>{
+ const f=await fixture();try{for(const platform of ['darwin','linux']){
+  const def=await f.select(platform);await writeDefinition(def);
+  const alias=join(f.dir,'leaf-'+platform);await symlink(def.path,alias);
+  await f.select(platform,true,{path:alias});
+  await assert.rejects(stopService(def),/FOREIGN_SERVICE_REGISTRATION/);
+  await assert.rejects(removeService(def),/FOREIGN_SERVICE_REGISTRATION/);
+  assert.equal(await readFile(def.path,'utf8'),def.content);
+ }
+ assert.equal((await f.commands()).filter(c=>c.args.includes('bootout')||c.args.includes('stop')||c.args.includes('disable')).length,0);
  }finally{await f.close()}
 });
 

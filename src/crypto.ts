@@ -1,10 +1,10 @@
 import { webcrypto, randomBytes } from 'node:crypto';
 import { LIMITS, UUID, object, exact } from './limits.js';
 const subtle=webcrypto.subtle;
-export type Channel='enrollment'|'activation'|'command'|'receipt'|'state'|'attention'|'control'|'controlReceipt';
+export type Channel='enrollment'|'activation'|'command'|'receipt'|'state'|'attention'|'control'|'controlReceipt'|'activityInterest'|'activityState';
 export interface Metadata{version:1;pairId:string;id:string;channel:Channel;issuedAt:number;expiresAt:number}
 export interface Envelope extends Metadata{nonce:string;ciphertext:string}
-const channels=['enrollment','activation','command','receipt','state','attention','control','controlReceipt'];
+const channels=['enrollment','activation','command','receipt','state','attention','control','controlReceipt','activityInterest','activityState'];
 function bytes(v:Uint8Array){return Uint8Array.from(v)}
 export function decode(value:unknown,length?:number){if(typeof value!=='string'||!/^[A-Za-z0-9_-]+$/.test(value))throw Error('INVALID_BASE64URL');const b=Buffer.from(value,'base64url');if(b.toString('base64url')!==value||(length!==undefined&&b.length!==length))throw Error('INVALID_BASE64URL');return b}
 export function validateEnvelope(input:unknown,now:number,allowExpired=false):Envelope{
@@ -12,7 +12,7 @@ export function validateEnvelope(input:unknown,now:number,allowExpired=false):En
  if(Buffer.byteLength(JSON.stringify(e))>LIMITS.envelopeBytes||e.version!==1||typeof e.pairId!=='string'||!UUID.test(e.pairId)||typeof e.id!=='string'||!UUID.test(e.id)||!channels.includes(String(e.channel)))throw Error('INVALID_ENVELOPE');
  if((e.channel==='receipt'||e.channel==='controlReceipt')&&Buffer.byteLength(JSON.stringify(e))>LIMITS.receiptBytes)throw Error('RECEIPT_LIMIT');
  if(!Number.isSafeInteger(e.issuedAt)||!Number.isSafeInteger(e.expiresAt)||Number(e.issuedAt)<0||Number(e.expiresAt)<=Number(e.issuedAt))throw Error('INVALID_TIME');
- const ttl=e.channel==='command'||e.channel==='control'?LIMITS.commandMs:LIMITS.enrollmentMs;
+ const ttl=e.channel==='activityInterest'?8*60*60*1000:e.channel==='command'||e.channel==='control'?LIMITS.commandMs:LIMITS.enrollmentMs;
  if(Number(e.expiresAt)-Number(e.issuedAt)>ttl||Number(e.issuedAt)>now+LIMITS.futureMs||(!allowExpired&&Number(e.expiresAt)<=now))throw Error('EXPIRED_OR_FUTURE');
  decode(e.nonce,12);const c=decode(e.ciphertext);if(c.length<16||c.length>LIMITS.plainBytes+16)throw Error('INVALID_CIPHERTEXT');return e as unknown as Envelope;
 }
