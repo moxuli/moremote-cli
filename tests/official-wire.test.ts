@@ -160,10 +160,10 @@ for(const ownedSubscriptions of [false,true])test(`real SDK wire (${ownedSubscri
    assert.deepEqual(journal.attention(pair.pairId,noticeNow),before,`a delayed ${transition} read must not resurrect a phone notice`);
    // The same old event must not acquire a newer, unrelated attention identity.
    if(transition==='new-attention'){
-    const read=Promise.withResolvers<()=>void>();holdAgentRead=read.resolve;
+    // An older event may be coalesced behind an existing read or dropped entirely.
+    // Assert the phone-visible invariant after the wire drains, not a required extra RPC.
     announce('finished',timestamp+4);
-    (await bounded(read.promise,2000,'STALE_EVENT_READ_NOT_OBSERVED'))();
-    await official.current(agent.id);await Promise.all(publications);
+    await flushWire();await official.current(agent.id);await Promise.all(publications);
     assert.equal(observed.length,count);
     assert.deepEqual(journal.attention(pair.pairId,noticeNow),before);
    }

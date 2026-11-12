@@ -34,11 +34,27 @@ Owner-approved notification/scoped delivery and local activity/widget integratio
   later decision; these isolated native tests neither use nor disable it. Older
   temporary-window shutdown receipts below are historical, not current policy.
 
+## Local0.1.2 candidate preparation
+
+- Package and lock root identities now select0.1.2; no dependency or compatibility
+  tuple changes. No tag, push, npm publication or GitHub Release has occurred.
+- The combined check passes typecheck and180/181 tests. Its remaining legacy-wire
+  case incorrectly requires an extra read for an old event that may be coalesced.
+  The test now drains the actual wire and retains the phone-visible no-new-notice
+  and unchanged-ciphertext assertions without demanding that incidental RPC.
+- Both actual SDK wire variants then pass2/2. Build, real packaged activation/
+  failed-start rollback/aliased frontend/clean stop, release identity validation
+  and deterministic0.1.2 packaging pass. These overlapping runs are not a new
+  single green full-suite result.
+- Hosted cross-platform CI, exact immutable publication/receiver installation
+  and public-to-public activation remain release gates. Production device reply,
+  approval and remote activity/widget delivery still require their own evidence.
+
 ## Active work — unreleased activity/widget integration
 
 - Published install identity is **`@moxuli/moremote`0.1.1**; command/runtime
   remains `moremote-cli`, with existing per-platform service identities.
-  Local activity/widget changes are **not released**; no version bump.
+  Local activity/widget changes are **not released**; local0.1.2 is a candidate.
 - Implemented locally: authenticated encrypted per-task interests and activity
   state, an owned optional2s host lane with250ms exact fallback reads, meaningful
   keyed widget fingerprints on existing snapshot publication, and normal-only
