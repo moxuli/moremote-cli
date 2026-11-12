@@ -105,16 +105,16 @@ with unchanged bootstrap/previous0.1.1. Normal stop/uninstall leaves
 LoadState=not-found, an empty FragmentPath, absent definition/control and no live
 supervisor/runtime. This is actual user-systemd, not every Linux distribution.
 
-Windows diagnosis first identifies missing BOM in a UTF-16LE task file. Native
-COM syntax-only validation of a decoded string does not test the file-byte
-encoding consumed by schtasks. The writer now emits FF FE. That permits actual
-registration, exposing a second product defect in the state-resource consumer:
-it rejects the leading decoded U+FEFF before the XML declaration. The reader now
-consumes one leading BOM without relaxing other ownership or XML checks.
+The preceding Windows QA implementation identified missing BOM in a UTF-16LE
+task import file. Native COM syntax-only validation of a decoded string did not
+test the file bytes consumed by schtasks. That QA writer emitted FF FE; its
+current reader was corrected to consume one leading U+FEFF while retaining
+ownership/XML checks. This was current/current QA evidence, not retained-version
+compatibility; the later correction below supersedes the persistent-BOM design.
 
-The focused18consumer run includes writer-to-real-resource-reader validation,
-legacy unmarked UTF-16 ownership inspection, repeated-BOM rejection, wrong
-encoding and foreign-marker rejection. Typecheck and build also pass.
+That18consumer run covered writer/current-reader consumption, legacy unmarked
+UTF-16 ownership inspection, repeated-BOM, wrong-encoding and foreign-marker
+rejection. Typecheck and build also passed.
 
 The final unwrapped native Windows Task Scheduler run passes in168.23seconds.
 It installs/starts QA0.1.1, authenticates status, activates synthetic9000.0.2,
@@ -129,4 +129,40 @@ mismatch was recorded separately rather than misrepresented as a product login
 requirement. Failed and diagnostic task registrations were normally removed.
 An independent provider review could not run because its read tools were
 refused; no review approval is claimed.
+
+
+## Retained public reader correction — 2026-11-12
+
+Fresh-context specification review found that unchanged public0.1.1 starts its
+resource reader before runtime readiness and cannot consume persistent BOM-prefixed
+ownership XML. A matching compatibility tuple and synthetic current/current
+native pass did not establish retained-reader compatibility.
+
+Persistent `moremote-cli-task.xml` is now BOM-free UTF-16LE. Native `/Create`
+receives a separate BOM-prefixed XML file in an owned private temporary directory
+outside shared state. `finally` removes that copy before `/Run`; registration or
+cleanup failure cannot start the runtime. No schema bump or migration is needed.
+
+Two new deterministic regressions first fail, then the20focused lifecycle/resource
+consumers, typecheck and build pass. The frozen public reader is unmodified,
+SHA256`1ee80f6bdab819e15da817038cecf46133b07d1a157663893a64112a2fdca13b`;
+an independent anonymous npm download confirms those module bytes. Fresh-context
+Stage A and Stage B re-review close the blocker, explicitly using the weaker
+same-provider fallback after the unavailable cross-provider attempt.
+
+The actual Windows journey starts unchanged npm0.1.1 bootstrap bytes, activates
+the current synthetic9000.0.2, fails9000.0.3 before readiness, recovers9000.0.2
+and normally stops/uninstalls. The native interval is183.86seconds; the enclosing
+fleet job takes202.70seconds. Independent final observations show no task,
+definition, control endpoint or live supervisor/runtime; successful-run runtime
+files are removed. The intentionally unused loopback official target yields
+degraded connection status while authenticated runtime/version checks succeed.
+
+Public0.1.1 archive SHA256 is
+`358574ca750d27c8a116743cd729d7ab830c41fc17045ddfa46ff808ff3bba3b`;
+unpublished exercised candidate SHA256 is
+`6dca555348e87dd395aa0564d97aa1499581fbeadc98b78dbb1c9c3c179ff861`.
+No real daemon/cloud/model operation, account/security-policy change, npm
+publication or everyday installed service occurs. Synthetic candidates are
+still not a new immutable public release or public-to-public delivery.
 

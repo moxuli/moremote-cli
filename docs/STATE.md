@@ -10,24 +10,26 @@ Owner-approved notification/scoped delivery and local activity/widget integratio
   install/start, authenticated status, QA0.1.1 → synthetic9000.0.2 activation,
   failed9000.0.3 startup rollback, normal stop/uninstall and independent absence
   of the unit, definition and live runtime. No cloud or real official daemon I/O.
-- Native Windows diagnosis exposed a missing UTF-16LE task-file BOM. Adding it
-  allowed registration but exposed a second real consumer defect: runtime
-  resource validation rejected its own BOM-prefixed XML. The writer now emits
-  BOM; the reader strips exactly one leading BOM while retaining all declaration,
-  Task-root, directory-bound marker, file-kind/link/mode and closing checks.
-- All18focused resource/lifecycle consumers, typecheck and build pass. Writer
-  bytes are consumed by the actual resource validator; double BOM, wrong encoding
-  and foreign ownership remain rejected.
-- Corrected native Windows Task Scheduler acceptance passes in168.23seconds:
-  install/start, authenticated status, QA0.1.1 → synthetic9000.0.2 activation,
-  failed9000.0.3 startup rollback and normal stop/uninstall. Independent checks
-  find no task, definition, control endpoint or live supervisor/runtime.
-- A separate read-only provider review was unavailable because both command and
-  file-read tools were refused. No review approval is claimed. All failed native
-  attempts/diagnostic registrations were removed through production APIs, with
-  independent absent task/definition/runtime evidence.
-- These are unpublished QA bytes, not a public-to-public update or npm release.
-  Source and exact exercised scope: [[2026-11-11-native-service-acceptance]].
+- Initial Windows QA exposed missing native-import BOM and current-reader BOM
+  handling. Fresh-context specification review then found that persisting a BOM
+  breaks unchanged public0.1.1 runtimes, despite the current/current QA success.
+- The current installer keeps persistent ownership XML BOM-free. Only a private
+  transient import outside shared state has a BOM; it is removed before `/Run`
+  and on `/Create` failure. Retained0.1.1 consumers remain usable for bootstrap
+  and rollback without a storage migration.
+- Both new consumer regressions first failed. All20focused lifecycle/resource
+  consumers, typecheck and build then pass. The frozen reader matches the
+  independently downloaded public0.1.1 module bytes.
+- The new actual Windows Task Scheduler journey passes in183.86seconds:
+  unchanged registry0.1.1 bootstrap → current synthetic9000.0.2 → deliberately
+  failed9000.0.3 → recovered9000.0.2, then normal stop/uninstall. Task,
+  definition, control endpoint and live supervisor/runtime are independently absent.
+- Fresh-context specification and quality re-review close the scoped blocker.
+  This is the explicitly weaker same-provider fallback, not cross-vendor approval.
+  Earlier168.23second QA acceptance and unavailable provider reviews remain
+  historical evidence in [[2026-11-11-native-service-acceptance]].
+- The candidate is unpublished QA bytes, not a public-to-public release. No real
+  official host, paid provider, cloud operation or everyday login service is used.
 - The shared production cloud remains persistently enabled under the owner's
   later decision; these isolated native tests neither use nor disable it. Older
   temporary-window shutdown receipts below are historical, not current policy.
@@ -65,10 +67,11 @@ Owner-approved notification/scoped delivery and local activity/widget integratio
   both SDK variants, then both passed with typecheck after observation-order
   fencing. Independent same-provider review reports no blocker; the preferred
   cross-vendor provider was unavailable.
-- Cloud is again **DISABLED**, production provider secrets restored and public503
-  independently observed. Genuine device reply/approval receipts and remote
-  ActivityKit/WidgetKit acceptance remain open. Existing official software and
-  daily-work sessions were not modified; no new npm release or permanent service.
+- Earlier bounded sandbox windows restored disabled service and production
+  provider secrets. The later November12 owner decision now keeps the existing
+  production service enabled; no temporary watchdog or sandbox swap is allowed.
+  Genuine device reply/approval receipts and remote ActivityKit/WidgetKit
+  acceptance remain open. No real-work session or new release is implied.
 - Fresh local end-to-end action acceptance passes against the unchanged official
   development mock, production runtime, real Pages/Worker/SQLite and a compiled
   unchanged native Kit/CryptoKit slice. Exact send and bound plan denial each
@@ -92,7 +95,8 @@ See [native service evidence](plans/2026-11-11-native-service-acceptance.md).
 Independent review closed a reproduced replacement-owner race with fresh post-probe
 supervisor/runtime liveness checks. The November12 continuation below additionally
 accepts native macOS upgrade/rollback with a real published bootstrap and synthetic
-candidates. A next immutable release and Linux/Windows native gates remain open.
+candidates. The November12 native Linux/Windows gates also pass as recorded above;
+a next immutable public release and public-to-public delivery remain open.
 Published0.1.1 does not contain the later source corrections.
 
 ## Packaged rollback continuation — 2026-11-12
@@ -292,7 +296,7 @@ Official tag v0.15.3 points to commit d91ae138cb931447635e94296023414a58bedcc5. 
 
 - Independent specification and quality/security reviews and frozen local check results belong to the integration owner.
 - Hosted cross-platform CI, exactv0.1.1 tag, npm publication, signed provenance and GitHub assets are verified above. Environment deployment is `v*`-tag-only. No broader branch/tag Ruleset or trusted-publisher migration is claimed.
-- The isolated macOS installed-service lifecycle has partial native acceptance above. Real published-version activation/rollback and Linux/systemd and Windows/logon-task installations still require their own operator-authorized OS observations.
+- The native macOS/Linux/Windows managers now have the scoped acceptance recorded above. Public-to-public next-version activation and corresponding published-version rollback still require their own release evidence; synthetic QA versions are not that proof.
 - No everyday login service, real-work-session send/approval or paid-model task was exercised. The temporary macOS registration was removed; it is not daily-host deployment.
 - One authorized synthetic sandbox alert was observed on a real iPad through the independent cloud/app path. This is not genuine permission/reply execution, production TestFlight delivery or terminated-app acceptance; emulation and artifact installation do not establish those gates.
 

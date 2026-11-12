@@ -42,6 +42,14 @@ After old exit, candidate readiness requires journal creation and acquired runti
 
 Opt-out during drain allows the old cycle to settle, then resumes old active without starting candidate. Opt-out during candidate startup drains it before resuming old active. Explicit stop signals only the owned service/runtime, writes a separate supervisor stop request, and waits for supervisor exit before managed deletion. Stop does not cause an internal respawn. A hung in-flight operation cannot be safely force-killed by an update: activation waits, status retains activating, and explicit operator stop remains separate. A staged package alone is never reported as active.
 
+On Windows, the persistent ownership XML remains BOM-free UTF-16LE so unchanged
+retained0.1.1 readers can validate shared state during startup and rollback.
+Task Scheduler's file import instead receives an owned private transient copy
+with the required UTF-16LE BOM, outside shared state. Remove that copy on every
+normal success/failure path and before `/Run`; failed cleanup must not start the
+runtime. Native registration acceptance must include unchanged public bootstrap
+bytes, not only current code relabeled as an older QA version.
+
 ## Evidence entrypoints
 
 `npm run check` exercises ordinary regression tests and compiles; `npm run smoke:upgrade` then packs three synthetic versions of the actual compiled package and installs them through real npm into isolated private prefixes. It starts the production retained service entry without registering an OS service, confirms9000.0.1→9000.0.2, exercises the retained frontend through a path alias, then queues compatible9000.0.3 whose disposable runtime exits before readiness. The supervisor must return to9000.0.2, retain bootstrap/previous, record the failed candidate and clear pending/activating before a clean stop. Only the disposable failed package bytes change. It contacts npm plus an intentionally unavailable localhost endpoint, never everyday official data or cloud. This is explicit acceptance, not an install hook. CI includes this smoke on macOS/Linux/Windows; observed results belong in STATE, not this specification.
