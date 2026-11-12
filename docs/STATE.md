@@ -34,10 +34,10 @@ Owner-approved notification/scoped delivery and local activity/widget integratio
   later decision; these isolated native tests neither use nor disable it. Older
   temporary-window shutdown receipts below are historical, not current policy.
 
-## Local0.1.2 candidate preparation
+## Released0.1.2 — 2026-11-12
 
-- Package and lock root identities now select0.1.2; no dependency or compatibility
-  tuple changes. No tag, push, npm publication or GitHub Release has occurred.
+- Package and lock root identities select0.1.2; no dependency or compatibility
+  tuple changes. Owner-approved tagv0.1.2 targets739c76008ea583fa86bfb023dafaa17a3ea9adf4.
 - The combined check passes typecheck and180/181 tests. Its remaining legacy-wire
   case incorrectly requires an extra read for an old event that may be coalesced.
   The test now drains the actual wire and retains the phone-visible no-new-notice
@@ -46,15 +46,32 @@ Owner-approved notification/scoped delivery and local activity/widget integratio
   failed-start rollback/aliased frontend/clean stop, release identity validation
   and deterministic0.1.2 packaging pass. These overlapping runs are not a new
   single green full-suite result.
-- Hosted cross-platform CI, exact immutable publication/receiver installation
-  and public-to-public activation remain release gates. Production device reply,
-  approval and remote activity/widget delivery still require their own evidence.
+- Hosted CI43227228037 passes full check/build, release validation and real
+  packaged upgrade on Ubuntu24.04, macOS15 and Windows2025.
+  Automatic Release43232455123 passes check/build, upgrade smoke, deterministic
+  packaging, existing-secret npm publication/provenance and GitHub Release.
+- Anonymous registry reads independently confirm version/latest0.1.2 after
+  asynchronous processing; publication is never repeated. Downloaded GitHub
+  bytes match SHA256SUMS and npm SHA1/SHA512 integrity. Archive SHA256:
+  `845fd98470964303a6a86dc696e64c47ac1e7b1ce90b59cd730cdec56d64f9bb`.
+- Actual public0.1.1 installation/retained supervisor discovers and downloads
+  public0.1.2 through its unchanged normal background scheduler, not a custom
+  fetcher, direct queue, altered package or fake clock. Exact authenticated
+  status becomes0.1.2; bootstrap/previous remain0.1.1; retained frontend returns
+  0.1.2; normal stop exits0 and all owned processes/files are removed, in80.12s.
+  No login service, real official connection or cloud operation occurs.
+  An initial fixture prepopulates an unowned state directory and is correctly
+  rejected before any process starts; initialization is corrected outside the
+  managed state, preserving strict ownership. Its exact failed fixture is removed.
+- Production device reply/approval and remote activity/widget delivery still
+  require their separate acceptance; the release does not claim those gates.
+- Release: https://github.com/moxuli/moremote-cli/releases/tag/v0.1.2
 
-## Active work — unreleased activity/widget integration
+## Released activity/widget integration — production acceptance open
 
-- Published install identity is **`@moxuli/moremote`0.1.1**; command/runtime
+- Published install identity is **`@moxuli/moremote`0.1.2**; command/runtime
   remains `moremote-cli`, with existing per-platform service identities.
-  Local activity/widget changes are **not released**; local0.1.2 is a candidate.
+  Activity/widget changes are included; physical production acceptance remains open.
 - Implemented locally: authenticated encrypted per-task interests and activity
   state, an owned optional2s host lane with250ms exact fallback reads, meaningful
   keyed widget fingerprints on existing snapshot publication, and normal-only

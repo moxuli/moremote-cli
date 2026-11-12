@@ -1,10 +1,10 @@
 # Changelog
 
-## 0.1.2 — release candidate
+## 0.1.2 — 2026-11-12
 
 - Add optional encrypted per-task activity interests/state and keyed meaningful-change widget reload fingerprints; existing official-only and scoped-command behavior remains independent.
 - Bound activity work in an owned cancellation-aware lane without blocking commands/controls; renew acknowledged ongoing measurements before expiry, retain unknown immutable retries, and preserve terminal recovery under validated normal-only quota pauses.
-- Document registration expiry/non-resurrection, exact pre-transport provider fences and pending native/live APNs acceptance. Candidate0.1.2 is not yet published; registry0.1.1 does not contain these changes.
+- Document registration expiry/non-resurrection, exact pre-transport provider fences and pending native/live APNs acceptance. Publish0.1.2 through the approved existing tag workflow; production device delivery remains a separate gate.
 - Preserve request-bound attention until that exact official request is resolved or retired; bind notice identity to its occurrence so reconnect/replacement cannot strand a still-pending question.
 - Derive completion/error notice identity from the canonical official attention timestamp, not the raw broadcast clock. Bound hydration to one in-flight read plus one latest event per agent and fence stale replies without letting an older observation cancel a newer terminal event.
 - Correct managed shutdown when native service removal closes IPC during graceful drain: wait for supervisor/runtime ownership retirement instead of reporting a spurious control-channel failure. Preserve strict unmanaged/malformed-response errors and never replay an uncertain stop.
@@ -12,6 +12,7 @@
 - Recognize canonical parent-path aliases for exact owned launchd/systemd registration files, including macOS `/tmp`→`/private/tmp`, without accepting leaf symlinks, distinct files or foreign registrations.
 - Preserve BOM-free Windows ownership XML for retained public0.1.1 readers; supply Task Scheduler's required UTF-16LE BOM only in a private transient import copy, removed before runtime startup and on registration failure. Retain exact ownership and malformed-encoding rejection.
 - Complete isolated native Linux systemd and Windows Task Scheduler activation, failed-start rollback, stop and uninstall acceptance using packaged QA bytes; this does not publish a new release or exercise production cloud delivery.
+- Verify immutable public npm/GitHub artifact equality and actual public0.1.1→0.1.2 normal background discovery/download/activation, retained bootstrap/frontend and clean owned stop without a service, real official connection or cloud operation.
 
 ## 0.1.1 — 2026-11-10
 
