@@ -34,6 +34,26 @@ node bin/moremote-cli.js run
 
 The example endpoint is synthetic. Omit `--target` to use the official `paseo.pid` listen address under `PASEO_HOME` (otherwise the platform home’s `.paseo`). Auth follows the official CLI: target password, then `PASEO_PASSWORD`, otherwise a rotating local credential only when the selected target exactly matches the pid listen address after official normalization. Credentials are never printed or uploaded. No automatic daemon start or upgrade.
 
+## Connect to the hosted MoRemote service
+
+After the published package is installed, explicitly enable the optional cloud
+connection while leaving the official Paseo daemon unchanged:
+
+```sh
+moremote-cli configure --api-origin https://moremote-cloud-ingress.pages.dev --cloud-on
+moremote-cli check --connect
+moremote-cli pair
+moremote-cli run
+```
+
+Scan the private one-use offer in MoRemote's system integration setup. Keep
+`run` in the foreground, or separately choose background installation with
+`moremote-cli service install --yes`. Configuration and package installation do
+not silently register a service. The hosted backend operates continuously;
+cloud participation remains off until each CLI user explicitly enables it.
+Production TestFlight tokens use production APNs, not a sandbox backend.
+
+
 For a separately operated relay:
 
 ```sh
