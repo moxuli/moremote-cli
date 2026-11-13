@@ -76,7 +76,9 @@ for(const outcome of ['available','unavailable','missing-capability'])test('publ
   assert.equal(code,0,error);assert.match(output,/automatic enrollment.*enabled/);const selected=readUpdateState(f.state)!;
   assert.equal(selected.active,'0.1.3');assert.equal(selected.bootstrap,'0.1.3');assert.equal(selected.previous,'0.1.2');assert.equal(selected.enabled,false);
   const saved=await loadConfig(f.state);assert.deepEqual(saved.pairs,[active,revoked]);assert.equal(saved.apiOrigin,origin);assert.equal(saved.target,config.target);assert.equal(saved.cloudEnabled,true);assert.deepEqual(saved.localEnrollment,{home:f.home});
-  const entry=join(versions,'0.1.3','node_modules','@moxuli','moremote','bin','moremote-service.js'),definition=serviceDefinition(process.platform,f.home,process.execPath,entry,f.state);assert.equal(await readFile(definition.path,'utf8'),definition.content);
+  const entry=join(versions,'0.1.3','node_modules','@moxuli','moremote','bin','moremote-service.js'),definition=serviceDefinition(process.platform,f.home,process.execPath,entry,f.state);
+  const servicePath=process.platform==='linux'?join(childEnvironment.XDG_CONFIG_HOME,'systemd','user','moremote-cli.service'):definition.path;
+  assert.equal(await readFile(servicePath,'utf8'),definition.content);
   const downloads=registryRequests.length,retained=await exec(process.execPath,[join(oldRoot,'bin','moremote-cli.js'),'setup','--yes','--data-dir',f.state],{env:childEnvironment,timeout:15000});
   assert.match(retained.stdout,/automatic enrollment.*enabled/);assert.equal(registryRequests.length,downloads);assert.equal(readUpdateState(f.state)?.active,'0.1.3');assert.equal(readUpdateState(f.state)?.enabled,false);
  }else{

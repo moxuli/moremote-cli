@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {readFile,writeFile,readdir,symlink,link,stat} from 'node:fs/promises';
+import {readFile,writeFile,readdir,symlink,link,lstat} from 'node:fs/promises';
 import {join} from 'node:path';
 import {spawn} from 'node:child_process';
 import {once} from 'node:events';
@@ -48,7 +48,15 @@ test('exact immutable request creates one durable pair and reuses its original c
  const f=await admitted(t);const first=await f.response();assert.equal(first.status,'offer');assert.deepEqual(first.offer,f.config.enrollmentRequests![0].offer);assert.equal(first.expiresAt,f.request().expiresAt);
  for(let retry=0;retry<3;retry++){const config=await loadConfig(f.state);await f.consumer.cycle(config,daemon,f.cloud);assert.deepEqual(await f.response(),first)}
  assert.equal(f.creates.size,1);assert.equal(f.cloudRequests.filter(request=>request.method==='POST').length,1);assert.equal((await loadConfig(f.state)).pairs.length,1);
- assert.equal((await stat(join(f.tree,'responses',requestId+'.json'))).mode&0o777,0o600);
+ const response=await lstat(join(f.tree,'responses',requestId+'.json'));
+ assert.equal(response.isFile(),true);assert.equal(response.isSymbolicLink(),false);assert.equal(response.nlink,1);
+ // Windows inherits the user profile ACL; POSIX mode bits cannot assert it.
+ if(process.platform!=='win32')assert.equal(response.mode&0o777,0o600);
+ for(const directory of [f.tree,join(f.tree,'responses')]){
+  const owned=await lstat(directory);assert.equal(owned.isDirectory(),true);assert.equal(owned.isSymbolicLink(),false);
+  if(process.platform!=='win32'){assert.equal(owned.mode&0o777,0o700);assert.equal(owned.uid,process.getuid!())}
+ }
+ assert.equal(await readFile(join(f.tree,'responses','.moremote-cli-owner'),'utf8'),'MoRemote CLI discovery responses v1\n');
  const descriptor=await readFile(join(f.tree,'descriptor.json'),'utf8');f.advance(29999);await f.consumer.cycle(await loadConfig(f.state),daemon,f.cloud);assert.equal(await readFile(join(f.tree,'descriptor.json'),'utf8'),descriptor);
  f.advance(1);await f.consumer.cycle(await loadConfig(f.state),daemon,f.cloud);assert.notEqual(await readFile(join(f.tree,'descriptor.json'),'utf8'),descriptor);
 });

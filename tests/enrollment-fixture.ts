@@ -73,7 +73,10 @@ export async function enrollmentFixture(t:TestContext){
    assert.ok(body);assert.deepEqual(pair.activationProof,body.proof);
    const proof=object(await openEnvelope(Buffer.from(pair.rootKey,'base64url'),body.proof));assert.equal(proof.daemonServerId,daemon);
    result={ok:true,status:'active'};
-  }else if(request.method==='GET'&&request.url!.endsWith('/controls'))result={ok:true,controls:[]};
+  }else if(request.method==='GET'&&request.url!.endsWith('/controls')){
+   if(!pair.active&&pair.revokedAt===undefined){response.writeHead(409,{'content-type':'application/json'});response.end(JSON.stringify({ok:false,error:{code:'pair_not_active',message:'pair_not_active'}}));return}
+   result={ok:true,controls:[]};
+  }
   else if(request.method==='GET'&&request.url!.endsWith('/commands'))result={ok:true,commands:[]};
   else if(request.method==='GET'&&request.url!.endsWith('/activities'))result={ok:true,subscriptions:[]};
   else if(!['PUT','POST'].includes(request.method!))throw Error('UNEXPECTED_CLOUD_REQUEST');

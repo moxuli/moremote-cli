@@ -70,6 +70,9 @@ export async function runRuntime(dir:string,version?:string){
  pollOrigins.add(origin);let retryState=retryStates.get(origin);if(!retryState){retryState={};retryStates.set(origin,retryState)}
  let cycleFence=cycleFences.get(origin);if(!cycleFence){cycleFence={};cycleFences.set(origin,cycleFence)}
  const cloud=new CloudClient(origin,pair.pairId,pair.hostToken,config.allowLoopbackHttp,fetch,controller.signal,retryState,cycleFence);let controlsVerified=true;
+ // Pending endpoints cannot use active-only control routes. Admit activation
+ // after official identity verification, without granting an execution lane.
+ if(!pair.active&&pair.revokedAt===undefined&&pair.relayRetiredAt===undefined&&!journal.pairRevoked(pair.pairId)){clouds.set(pair.pairId,cloud);continue}
  try{for(const envelope of await cloud.controls()){try{const state=await processControl({pair,journal,cloud},envelope);if(state==='revoked'){pair.active=false;pair.revokedAt??=journal.revocationTime(pair.pairId)??Date.now();await saveConfig(dir,config)}}catch(error){failure=error;controlsVerified=false;if(!retryPaused(error))acquisitionFailed=true}}}
  catch(error){failure=error;if(!await observeRelayRetirement(config,dir,pair,cloud,error)){if(!retryPaused(error))acquisitionFailed=true;continue}}
  if(controlsVerified||journal.pairRevoked(pair.pairId)||pair.relayRetiredAt!==undefined)clouds.set(pair.pairId,cloud);
@@ -107,6 +110,9 @@ export async function runRuntime(dir:string,version?:string){
  }
  for(const pair of config.pairs){if(stopped)break;const cloud=clouds.get(pair.pairId);if(!cloud||cycleFences.get(cloud.origin)?.error)continue;try{
  if(pair.daemonServerId&&pair.daemonServerId!==official.info()!.serverId){if(journal.pairRevoked(pair.pairId)||pair.relayRetiredAt!==undefined)continue;throw Error('PAIR_DAEMON_MISMATCH')}
+ // A new activation gets no commands/state in this cycle. The next cycle must
+ // acquire and validate controls before it can execute any phone operation.
+ if(!pair.active&&pair.revokedAt===undefined&&pair.relayRetiredAt===undefined&&!journal.pairRevoked(pair.pairId)){await activatePending(config,dir,pair,cloud,official.info()!.serverId,snapshot.hostName);continue}
  // Read-only reconciliation remains available after revoke and original message expiry.
  if(await reconcileJournal({pair,journal,official,cloud,clock:Date.now}))failure=Error('RECEIPT_RECONCILIATION_FAILED');
  if(journal.pairRevoked(pair.pairId)||pair.relayRetiredAt!==undefined)continue;

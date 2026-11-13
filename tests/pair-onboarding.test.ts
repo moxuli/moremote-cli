@@ -137,13 +137,15 @@ test('explicit pair opts in on configured custom origin without retargeting reta
 
 test('pair rejects invalid configured origin and pinned daemon mismatch before cloud enrollment', {timeout:30000},async t=>{
  const f=await fixture(t);
- const config:Config={...(await loadConfig(f.state)),apiOrigin:'http://synthetic-insecure.example.test',cloudEnabled:false};
+ const config:Config={...(await loadConfig(f.state)),paseoHome:f.paseoHome,apiOrigin:'http://synthetic-insecure.example.test',cloudEnabled:false};
  await saveConfig(f.state,config);
  let result=await f.cli(['pair','--json']);assert.notEqual(result.code,0);assert.match(result.error,/HTTPS_REQUIRED/);
  assert.equal(f.hellos.length,0);assert.equal(f.cloudRequests.length,0);
  config.apiOrigin=production;config.daemonServerId='synthetic-other-daemon';await saveConfig(f.state,config);
  const before=await readFile(join(f.state,'config.json'),'utf8');
  result=await f.cli(['pair','--json']);assert.notEqual(result.code,0);assert.match(result.error,/DAEMON_IDENTITY_CHANGED/);
+ assert.equal(f.hellos.length,1,'daemon pinning must inspect the authenticated synthetic daemon');assert.equal(result.out,'');
+ assert.doesNotMatch(result.error,new RegExp(localCredential));assert.equal(result.error.includes(f.home),false);
  assert.equal(await readFile(join(f.state,'config.json'),'utf8'),before);assert.equal(f.cloudRequests.length,0);
  await f.verifyOfficial();
 });

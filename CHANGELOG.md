@@ -2,6 +2,8 @@
 
 ## 0.1.3 — 2026-11-13
 
+- Activate pending endpoints before requesting active-only control routes; verify official identity, original expiry and revocation first, then require fresh controls in the following cycle before any command or state publication.
+
 - Refuse duplicate `run` before any config rewrite; initialize fresh runtime config only after ownership. Keep setup's load/authenticate/save under the same cross-process ownership after package preparation, so a concurrent run cannot lose newer endpoint state. Unify config readers/writers at524288bytes and reject oversize serialized writes without replacing state.
 - Make `setup` reachable through a new capability-aware frontend when retained public0.1.2 lacks it; explicitly select verified exact-current enrollment-capable owned runtime/bootstrap while preserving pairs/custom origin/update opt-out. Unavailable current packages fail without reporting enabled.
 - Bound automatic enrollment to one optional cloud-create attempt per cycle with an independent3s abort deadline, retaining original durable retry bytes and existing phone control cadence.

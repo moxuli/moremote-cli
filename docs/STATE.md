@@ -2,6 +2,18 @@
 
 ## 0.1.3 release candidate — owner-authorized, not yet published
 
+- First hosted run43378427840 correctly rejects three cross-environment fixture
+  defects: inherited config/service paths, unsupported Windows POSIX-mode equality,
+  and an unbound synthetic Paseo home whose local mismatch check had accidentally
+  contacted the ordinary daemon read-only. Bind the exact fixture home and require
+  its real handshake, no cloud calls, unchanged config and private-output absence.
+- Stricter pending-endpoint controls return409 before activation. Runtime now
+  activates only after official identity and original expiry/revocation checks;
+  no command/state lane exists in that cycle, and the next cycle validates controls.
+  Shared origin quota fences and fixed activation proof remain intact. Independent
+  narrow review finds no blocker. Final unchanged-input full check passes221/221
+  and build; hosted portability/packaged smoke are being rerun on this exact delta.
+
 - Integrated51942a0 and reviewed the final enrollment/setup and packaging delta.
   Exact public0.1.2 archive bytes now live in the test fixtures with verified npm
   SHA1/SHA512 and matching recorded GitHub SHA256, independent of workstation caches.

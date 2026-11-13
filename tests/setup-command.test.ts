@@ -31,9 +31,12 @@ if(args.includes('show'))console.log('LoadState=not-found\\nFragmentPath=');
   expected=join(packageRoot,'bin','moremote-service.js');await writeFile(expected,"if(!process.argv.includes('--probe'))throw Error('UNEXPECTED_SERVICE_START');\n",{mode:0o600});
   writeUpdateState(f.state,initialUpdateState('0.1.3'));disableAutoUpdate(f.state);updateBefore=await readFile(join(root,'update.json'),'utf8');
  }
- const child=spawn(process.execPath,['--import','tsx','src/cli.ts','setup','--yes','--data-dir',f.state],{cwd:new URL('..',import.meta.url),env:{...process.env,HOME:f.home,USERPROFILE:f.home,XDG_CONFIG_HOME:join(f.home,'config'),PATH:tools,npm_execpath:npm,PASEO_HOME:f.paseoHome,PASEO_PASSWORD:'',SETUP_LOG:log},stdio:['ignore','pipe','pipe']});
+ const childEnvironment={...process.env,HOME:f.home,USERPROFILE:f.home,XDG_CONFIG_HOME:join(f.home,'config'),PATH:tools,npm_execpath:npm,PASEO_HOME:f.paseoHome,PASEO_PASSWORD:'',SETUP_LOG:log};
+ const child=spawn(process.execPath,['--import','tsx','src/cli.ts','setup','--yes','--data-dir',f.state],{cwd:new URL('..',import.meta.url),env:childEnvironment,stdio:['ignore','pipe','pipe']});
  let output='',error='';child.stdout.on('data',chunk=>{output+=chunk});child.stderr.on('data',chunk=>{error+=chunk});const [code]=await once(child,'exit');assert.equal(code,0,error);
- const definition=serviceDefinition(process.platform,f.home,process.execPath,expected,f.state),content=await readFile(definition.path,'utf8');assert.equal(content,definition.content);
+ const definition=serviceDefinition(process.platform,f.home,process.execPath,expected,f.state);
+ const servicePath=process.platform==='linux'?join(childEnvironment.XDG_CONFIG_HOME,'systemd','user','moremote-cli.service'):definition.path;
+ assert.equal(await readFile(servicePath,'utf8'),definition.content);
  const commands=(await readFile(log,'utf8')).trim().split('\n').map(line=>JSON.parse(line) as unknown);
  assert.ok(commands.some(command=>Array.isArray(command)&&(command.includes('bootstrap')||command.includes('enable'))));
  const config=await loadConfig(f.state);assert.equal(config.apiOrigin,origin);assert.equal(config.cloudEnabled,true);assert.deepEqual(config.localEnrollment,{home:f.home});assert.equal(config.pairs.length,0);assert.equal(f.cloudRequests.length,0);
