@@ -1,5 +1,10 @@
 # Changelog
 
+## Unreleased
+
+- Make explicit `pair` the cloud opt-in and default to the production endpoint only when no origin is configured; reuse existing official local discovery without changing custom targets, per-phone authority or service installation.
+- Include genuine provider and creation time with last-user time in encrypted task snapshots and meaningful widget fingerprints; retain absent user recency rather than using assistant updates.
+
 ## 0.1.2 — 2026-11-12
 
 - Add optional encrypted per-task activity interests/state and keyed meaningful-change widget reload fingerprints; existing official-only and scoped-command behavior remains independent.

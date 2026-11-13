@@ -1,8 +1,33 @@
-# Current state — 2026-11-12
+# Current state — 2026-11-13
 
 ## Scope
 
 Owner-approved notification/scoped delivery and local activity/widget integration; Apache-2.0. Standalone Node24 companion targeting inspected official SDK/protocol0.15.3. Existing iOS protocol-vector floor is independent and unchanged. OpenUI and broader system extensions remain outside this scope.
+
+## Unreleased Share-first onboarding delta — locally verified
+
+- Approved cross-repository plan: MoRemote
+  `docs/plans/2026-11-13-share-first-onboarding.md`; CLI ownership is source,
+  focused consumers and public docs only. No publication or deployment.
+- Explicit `pair` opts in to cloud, uses the production endpoint only when no
+  origin exists, and reuses existing official listen/credential discovery.
+  Origin validation, daemon pinning, custom targets/origins and retained
+  pair authority remain intact. Plain load/check/status remain passive.
+- Task snapshots carry genuine provider and ISO-8601 creation time alongside
+  last-user time, through existing bounded projection and authenticated state.
+  Widget equality includes the new meaningful metadata. No assistant-update
+  substitution for user recency.
+- Added actual CLI enrollment consumers with a synthetic official WebSocket
+  and isolated relay, passive diagnostics/custom authority/invalid-origin and
+  daemon-pin cases; added real-SDK encrypted task metadata consumers.
+- Node24.13.0 typecheck, 22 focused pair-onboarding/task-projection/activity/CLI
+  consumers, and compiled build pass. The actual SDK/HTTP boundary exercises
+  passive diagnostics, authenticated enrollment, custom authority and encrypted
+  metadata without production enrollment or official-file changes.
+- Independent read-only review `run-20261113030053-9f69faa3` approves the scoped
+  implementation. The same-provider fallback is explicit; this is not physical
+  acceptance or a new package release. Public0.1.2 and its cached receiver remain
+  unchanged.
 
 ## Native service acceptance — 2026-11-12
 

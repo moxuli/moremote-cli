@@ -8,6 +8,20 @@ Each pairing retains its explicit API origin through retirement. Local revokedAt
 
 MOREMOTE_CLI_HOME or --data-dir overrides platform state defaults: ~/Library/Application Support/MoRemoteCLI on macOS, LOCALAPPDATA/MoRemoteCLI on Windows, XDG_STATE_HOME/moremote-cli (fallback ~/.local/state/moremote-cli) on Linux. PASEO_HOME selects the official read-only home, PASEO_PASSWORD matches official CLI password precedence. Only paseo.pid and local-credential are read under the official home, only at an explicit connection. No credential discovery scans or official writes. The unpublished former moremote-companion identity has no command/env aliases or automatic state adoption.
 
+Unreleased onboarding: explicit `pair` is cloud consent. It uses
+`https://moremote-cloud-ingress.pages.dev` only when `apiOrigin` is absent,
+validates the selected origin under the existing TLS/explicit-loopback rules,
+and connects to the selected official daemon before durably enabling cloud and
+creating a fresh one-phone offer. Existing custom target/origin and retained
+per-pair origins/keys/revocation remain unchanged. Without an explicit target,
+the existing `paseo.pid` listen address and matching local credential are reused;
+no second relay, official password setup or official file change is required.
+`configure` remains available for advanced targets/origins. Loading config,
+`check` and `status` do not select a default origin, enable cloud or enroll;
+`check --connect` only connects read-only to official Paseo. Pairing never
+installs a service. Published0.1.2 still requires explicit origin/cloud
+configuration before pairing; this source delta is not published.
+
 ## Central limits (src/limits.ts)
 
 Envelope request128KiB; decrypted content64KiB; send text60000 UTF-8 bytes; command/control TTL300s; enrollment/state/attention maximum600s; receipt/controlReceipt maximum8KiB serialized envelope with600s attestation interval; future clock tolerance120s (never expiry grace). User payloads expire at original TTL, minimal encrypted receipts/evidence remain24h after original operation/control expiry. Receipt revision is persisted before I/O; control ack revision1 is immutable. At most1000 operations,1000 controls and1000 attention records per pairing,100 tasks/snapshot,10 pending requests/task,16 providers,8 windows/balances/provider. Raw enhanced request limit8KiB; whole state limit60000bytes. State refresh30s, polling3s backing off to30s, HTTP timeout20s, official connection/read15s, SDK mutation timeout per pinned upstream. Capacity errors never silently evict live authority.

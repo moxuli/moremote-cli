@@ -80,6 +80,8 @@ test('widget fingerprint hides content and ignores clock/fetchedAt/order but cha
  const b={...a,measuredAt:now+30000,tasks:[...a.tasks].reverse(),usage:{fetchedAt:'new',providers:[{providerId:'p',fetchedAt:'new',windows:[{remainingPct:50}]}]}};
  const first=await widgetFingerprint(pair,a);assert.match(first,/^[A-Za-z0-9_-]{43}$/);assert.equal(first,await widgetFingerprint(pair,b));
  assert.notEqual(first,await widgetFingerprint(pair,{...a,tasks:[{...task,requiresAttention:true}]}));
+ assert.notEqual(first,await widgetFingerprint(pair,{...a,tasks:[{...task,provider:'codex'},{...task,agentId:'second'}]}));
+ assert.notEqual(first,await widgetFingerprint(pair,{...a,tasks:[{...task,createdAt:new Date(now-200000).toISOString()},{...task,agentId:'second'}]}));
  assert.notEqual(first,await widgetFingerprint(pair,{...a,usage:{providers:[{windows:[{remainingPct:49}]}]}}));
  assert.notEqual(first,await widgetFingerprint({...pair,rootKey:Buffer.alloc(32,2).toString('base64url')},a));
 });

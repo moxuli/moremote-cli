@@ -3,7 +3,7 @@
 Optional, independent Apache-2.0 computer companion for MoRemote and an **unmodified Paseo 0.15.3** daemon. Existing official-only clients keep working without this project or its cloud.
 
 Canonical repository/command: `moremote-cli`; public npm package:
-**`@moxuli/moremote`** (published **0.1.1**); source entry: `bin/moremote-cli.js`.
+**`@moxuli/moremote`** (published **0.1.2**); source entry: `bin/moremote-cli.js`.
 There is no unscoped npm alias or automatic adoption of foreign/old state.
 
 ## Install the published package
@@ -36,21 +36,28 @@ The example endpoint is synthetic. Omit `--target` to use the official `paseo.pi
 
 ## Connect to the hosted MoRemote service
 
-After the published package is installed, explicitly enable the optional cloud
-connection while leaving the official Paseo daemon unchanged:
+The following zero-configuration pairing flow is **unreleased source behavior**.
+Published0.1.2 still requires
+`moremote-cli configure --api-origin https://moremote-cloud-ingress.pages.dev --cloud-on`
+before pairing.
+
+With the official Paseo daemon already running, explicitly enroll a phone:
 
 ```sh
-moremote-cli configure --api-origin https://moremote-cloud-ingress.pages.dev --cloud-on
-moremote-cli check --connect
 moremote-cli pair
 moremote-cli run
 ```
 
 Scan the private one-use offer in MoRemote's system integration setup. Keep
 `run` in the foreground, or separately choose background installation with
-`moremote-cli service install --yes`. Configuration and package installation do
-not silently register a service. The hosted backend operates continuously;
-cloud participation remains off until each CLI user explicitly enables it.
+`moremote-cli service install --yes`. Pairing itself never installs a service.
+Explicit `pair` enables cloud participation and uses the built-in production
+endpoint only when no API origin is configured. Existing custom origins,
+targets and per-phone authority are preserved; `configure` remains available
+for advanced setup. The official connection is discovered from its existing
+local listen address and credential, not a second chat relay or password.
+Plain configuration loads, `check` and `status` never opt in or enroll a phone;
+only `check --connect` performs a read-only official connection.
 Production TestFlight tokens use production APNs, not a sandbox backend.
 
 

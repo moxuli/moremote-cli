@@ -7,6 +7,7 @@ import {CloudError,type CloudClient} from './cloud-client.js';
 export interface ActivityTask {
  agentId:string;title:string|null;status:string;updatedAt:string;
  requiresAttention:boolean;attentionReason:string|null;
+ provider?:string;createdAt?:string|null;
  lastUserMessageAt?:string|null;activeTurnStartedAt?:string|null;cwd?:string|null;
  pendingRequests?:readonly {requestId:string}[];
 }
@@ -47,7 +48,7 @@ function usageValues(value:unknown):unknown {
 }
 /** Keyed opaque equality token; no raw task, usage, or title enters cloud metadata. */
 export async function widgetFingerprint(pair:Pick<Pair,'pairId'|'rootKey'>,snapshot:ActivitySnapshot){
- const tasks=snapshot.tasks.map(task=>({agentId:task.agentId,title:task.title,status:task.status,
+ const tasks=snapshot.tasks.map(task=>({agentId:task.agentId,provider:task.provider??null,createdAt:task.createdAt??null,title:task.title,status:task.status,
   requiresAttention:task.requiresAttention,attentionReason:task.attentionReason,
   lastUserMessageAt:task.lastUserMessageAt??null,activeTurnStartedAt:task.activeTurnStartedAt??null,
   cwd:task.cwd??null,pendingRequestIds:task.pendingRequests?.map(p=>p.requestId).sort()??[]})).sort((a,b)=>a.agentId.localeCompare(b.agentId));
