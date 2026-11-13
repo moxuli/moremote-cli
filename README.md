@@ -34,10 +34,11 @@ node bin/moremote-cli.js run
 
 The example endpoint is synthetic. Omit `--target` to use the official `paseo.pid` listen address under `PASEO_HOME` (otherwise the platform home’s `.paseo`). Auth follows the official CLI: target password, then `PASEO_PASSWORD`, otherwise a rotating local credential only when the selected target exactly matches the pid listen address after official normalization. Credentials are never printed or uploaded. No automatic daemon start or upgrade.
 
-## Connect once through official Paseo — unreleased source
+## Connect once through official Paseo
 
-The single-pairing flow below is unreleased **source 0.1.3**, not published
-0.1.2. The source version change is not a package publication or production enrollment.
+Single-pairing setup requires **MoRemote CLI0.1.4 or later**. Update an older
+CLI before using this command. Publication and platform acceptance receipts are
+recorded in `docs/STATE.md`.
 
 With the official Paseo daemon already running:
 

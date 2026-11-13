@@ -23,13 +23,13 @@ if(args.includes('show'))console.log('LoadState=not-found\\nFragmentPath=');
  let expected=fileURLToPath(new URL('../bin/moremote-cli.js',import.meta.url)),updateBefore:string|undefined;
  if(managed){
   const root=join(f.state,'managed'),versions=join(root,'versions');await privateManagedDirectory(root);await privateManagedDirectory(versions);
-  const packageRoot=join(versions,'0.1.3','node_modules','@moxuli','moremote');
+  const packageRoot=join(versions,'0.1.4','node_modules','@moxuli','moremote');
   await mkdir(join(packageRoot,'bin'),{recursive:true,mode:0o700});await mkdir(join(packageRoot,'dist'),{mode:0o700});
-  await writeFile(join(packageRoot,'package.json'),JSON.stringify({name:'@moxuli/moremote',version:'0.1.3',moremote:{updateProtocol:1,journalSchema:1,wireProtocol:1,localEnrollment:1,configBytes:524288}}),{mode:0o600});
+  await writeFile(join(packageRoot,'package.json'),JSON.stringify({name:'@moxuli/moremote',version:'0.1.4',moremote:{updateProtocol:1,journalSchema:1,wireProtocol:1,localEnrollment:1,configBytes:524288}}),{mode:0o600});
   await writeFile(join(packageRoot,'bin','moremote-cli.js'),'// Synthetic retained frontend.\n',{mode:0o600});
   await writeFile(join(packageRoot,'dist','cli.js'),'// Synthetic retained runtime.\n',{mode:0o600});
   expected=join(packageRoot,'bin','moremote-service.js');await writeFile(expected,"if(!process.argv.includes('--probe'))throw Error('UNEXPECTED_SERVICE_START');\n",{mode:0o600});
-  writeUpdateState(f.state,initialUpdateState('0.1.3'));disableAutoUpdate(f.state);updateBefore=await readFile(join(root,'update.json'),'utf8');
+  writeUpdateState(f.state,initialUpdateState('0.1.4'));disableAutoUpdate(f.state);updateBefore=await readFile(join(root,'update.json'),'utf8');
  }
  const childEnvironment={...process.env,HOME:f.home,USERPROFILE:f.home,XDG_CONFIG_HOME:join(f.home,'config'),PATH:tools,npm_execpath:npm,PASEO_HOME:f.paseoHome,PASEO_PASSWORD:'',SETUP_LOG:log};
  const child=spawn(process.execPath,['--import','tsx','src/cli.ts','setup','--yes','--data-dir',f.state],{cwd:new URL('..',import.meta.url),env:childEnvironment,stdio:['ignore','pipe','pipe']});

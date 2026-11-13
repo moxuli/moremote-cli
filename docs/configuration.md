@@ -22,7 +22,7 @@ enabling the feature, then moves active/bootstrap while retaining previous
 packages, pairs/custom origin and the independent auto-update opt-out.
 `SETUP_CURRENT_PACKAGE_UNAVAILABLE`/`SETUP_CAPABILITY_REQUIRED` are failures,
 never enabled success or an older-package fallback. Nothing patches/upgrades
-official Paseo or global tools. Source0.1.3 is not published by this change.
+official Paseo or global tools. This capability requires CLI0.1.4 or later.
 
 Optional schema-1 fields are `localEnrollment:{home:<absolute user home>}` and
 at most16 `enrollmentRequests`. Only explicit setup supplies that home; ordinary

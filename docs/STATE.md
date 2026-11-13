@@ -1,6 +1,21 @@
 # Current state — 2026-11-13
 
-## 0.1.3 release candidate — owner-authorized, not yet published
+## 0.1.4 release candidate — owner-authorized, not yet published
+
+- Ordinary config rename is now distinguished from an unsafe resource: at most
+  three reopen attempts, independent descriptor/path validation, retired handles
+  discarded, strict no-follow/user/private-mode/link/byte/encoding checks retained.
+  Same-inode content changes remain rejected. Real rename regressions reproduce
+  the failure before repair, then22resource consumers and the original2runtime
+  cases pass. Final unchanged-input full check passes235/235,typecheck and build.
+  Stage A narrow review passes; independent quality/security review and fresh
+  hosted three-platform verification remain in progress before publication.
+
+- Exact tagv0.1.3 and its successful three-platform CI43380589650 are retained.
+  Release43381419784 fails its full check before packaging/publication: concurrent
+  normal runtime config replacement triggers FOREIGN_RESOURCE_LIMIT in a read.
+  Publish and GitHub Release steps are skipped; no0.1.3 package is submitted.
+  Preserve that immutable failed tag and prepare0.1.4 after a deterministic repair.
 
 - First hosted run43378427840 correctly rejects three cross-environment fixture
   defects: inherited config/service paths, unsupported Windows POSIX-mode equality,

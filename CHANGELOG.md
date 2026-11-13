@@ -1,6 +1,8 @@
 # Changelog
 
-## 0.1.3 — 2026-11-13
+## 0.1.4 — 2026-11-13
+
+- Read complete owned private config snapshots across normal atomic replacement with bounded reopen attempts; retain no-follow, owner/mode/link/size/encoding checks and rejection of in-place changes.
 
 - Activate pending endpoints before requesting active-only control routes; verify official identity, original expiry and revocation first, then require fresh controls in the following cycle before any command or state publication.
 

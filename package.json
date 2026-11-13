@@ -1,6 +1,6 @@
 {
   "name": "@moxuli/moremote",
-  "version": "0.1.3",
+  "version": "0.1.4",
   "description": "Optional encrypted notification and scoped-action companion for Paseo",
   "license": "Apache-2.0",
   "type": "module",

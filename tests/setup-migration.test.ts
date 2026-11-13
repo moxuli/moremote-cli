@@ -40,7 +40,7 @@ for(const outcome of ['available','unavailable','missing-capability'])test('publ
   const source=await readFile(join(repo,'src',name),'utf8');const result=ts.transpileModule(source,{fileName:name,compilerOptions:{target:ts.ScriptTarget.ES2024,module:ts.ModuleKind.ESNext}});
   await writeFile(join(build,'dist',name.replace(/\.ts$/,'.js')),result.outputText,{mode:0o600});
  }
- const manifest=JSON.parse(await readFile(join(repo,'package.json'),'utf8'));assert.equal(manifest.version,'0.1.3');manifest.dependencies={};delete manifest.devDependencies;delete manifest.scripts;
+ const manifest=JSON.parse(await readFile(join(repo,'package.json'),'utf8'));assert.equal(manifest.version,'0.1.4');manifest.dependencies={};delete manifest.devDependencies;delete manifest.scripts;
  await writeFile(join(build,'package.json'),JSON.stringify(manifest),{mode:0o600});
  const globalRoot=join(f.home,'global','node_modules','@moxuli','moremote');await mkdir(dirname(globalRoot),{recursive:true,mode:0o700});await cp(build,globalRoot,{recursive:true});
  if(outcome==='missing-capability'){delete manifest.moremote.localEnrollment;await writeFile(join(build,'package.json'),JSON.stringify(manifest))}
@@ -74,13 +74,13 @@ for(const outcome of ['available','unavailable','missing-capability'])test('publ
  assert.ok(registryRequests.some(path=>decodeURIComponent(path.split('?')[0])==='/@moxuli/moremote'),'real npm must request the exact candidate from the isolated registry');
  if(outcome==='available'){
   assert.equal(code,0,error);assert.match(output,/automatic enrollment.*enabled/);const selected=readUpdateState(f.state)!;
-  assert.equal(selected.active,'0.1.3');assert.equal(selected.bootstrap,'0.1.3');assert.equal(selected.previous,'0.1.2');assert.equal(selected.enabled,false);
+  assert.equal(selected.active,'0.1.4');assert.equal(selected.bootstrap,'0.1.4');assert.equal(selected.previous,'0.1.2');assert.equal(selected.enabled,false);
   const saved=await loadConfig(f.state);assert.deepEqual(saved.pairs,[active,revoked]);assert.equal(saved.apiOrigin,origin);assert.equal(saved.target,config.target);assert.equal(saved.cloudEnabled,true);assert.deepEqual(saved.localEnrollment,{home:f.home});
-  const entry=join(versions,'0.1.3','node_modules','@moxuli','moremote','bin','moremote-service.js'),definition=serviceDefinition(process.platform,f.home,process.execPath,entry,f.state);
+  const entry=join(versions,'0.1.4','node_modules','@moxuli','moremote','bin','moremote-service.js'),definition=serviceDefinition(process.platform,f.home,process.execPath,entry,f.state);
   const servicePath=process.platform==='linux'?join(childEnvironment.XDG_CONFIG_HOME,'systemd','user','moremote-cli.service'):definition.path;
   assert.equal(await readFile(servicePath,'utf8'),definition.content);
   const downloads=registryRequests.length,retained=await exec(process.execPath,[join(oldRoot,'bin','moremote-cli.js'),'setup','--yes','--data-dir',f.state],{env:childEnvironment,timeout:15000});
-  assert.match(retained.stdout,/automatic enrollment.*enabled/);assert.equal(registryRequests.length,downloads);assert.equal(readUpdateState(f.state)?.active,'0.1.3');assert.equal(readUpdateState(f.state)?.enabled,false);
+  assert.match(retained.stdout,/automatic enrollment.*enabled/);assert.equal(registryRequests.length,downloads);assert.equal(readUpdateState(f.state)?.active,'0.1.4');assert.equal(readUpdateState(f.state)?.enabled,false);
  }else{
   assert.notEqual(code,0);assert.match(error,outcome==='unavailable'?/SETUP_CURRENT_PACKAGE_UNAVAILABLE/:/SETUP_CAPABILITY_REQUIRED/);assert.doesNotMatch(output,/enabled/);
   assert.equal(readUpdateState(f.state)?.active,'0.1.2');assert.deepEqual(await readFile(join(f.state,'config.json')),originalConfig);

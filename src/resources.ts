@@ -22,28 +22,47 @@ export interface RuntimeResources {
 }
 export function hasCode(error:unknown,code:string) {return error instanceof Error&&'code' in error&&error.code===code;}
 export function sameResource(left:ResourceIdentity,right:ResourceIdentity) {return left.dev===right.dev&&left.ino===right.ino;}
+function assertResource(stat:Stats,kind:'file'|'directory'|'socket',privateMode:boolean,retiredFile=false) {
+ if(stat.isSymbolicLink()||!(kind==='file'?stat.isFile():kind==='directory'?stat.isDirectory():stat.isSocket()))throw Error('FOREIGN_RESOURCE_KIND');
+ if(kind!=='directory'&&stat.nlink!==1&&!(retiredFile&&kind==='file'&&stat.nlink===0))throw Error('FOREIGN_RESOURCE_LINKS');
+ if(typeof process.getuid==='function'&&stat.uid!==process.getuid())throw Error('FOREIGN_RESOURCE_USER');
+ if(privateMode&&process.platform!=='win32'&&((stat.mode&0o7077)!==0||(stat.mode&(kind==='directory'?0o700:0o600))!==(kind==='directory'?0o700:0o600)))throw Error('FOREIGN_RESOURCE_MODE');
+}
 export function inspectResource(path:string,kind:'file'|'directory'|'socket',optional=false,privateMode=true):Stats|null {
  let stat:Stats;
  try {stat=lstatSync(path);} catch(error) {if(optional&&hasCode(error,'ENOENT'))return null;throw error;}
- if(stat.isSymbolicLink()||!(kind==='file'?stat.isFile():kind==='directory'?stat.isDirectory():stat.isSocket()))throw Error('FOREIGN_RESOURCE_KIND');
- if(kind!=='directory'&&stat.nlink!==1)throw Error('FOREIGN_RESOURCE_LINKS');
- if(typeof process.getuid==='function'&&stat.uid!==process.getuid())throw Error('FOREIGN_RESOURCE_USER');
- if(privateMode&&process.platform!=='win32'&&((stat.mode&0o7077)!==0||(stat.mode&(kind==='directory'?0o700:0o600))!==(kind==='directory'?0o700:0o600)))throw Error('FOREIGN_RESOURCE_MODE');
+ assertResource(stat,kind,privateMode);
  return stat;
 }
 export function readPrivateText(path:string,limit:number,encoding:'utf8'|'utf16le'='utf8',privateMode=true) {
- const before=inspectResource(path,'file',false,privateMode);
- const fd=openSync(path,constants.O_RDONLY|constants.O_NOFOLLOW|constants.O_NONBLOCK);
- try {
-  const opened=fstatSync(fd);
-  if(!before||!sameResource(before,opened)||!opened.isFile()||opened.nlink!==1||opened.size>limit)throw Error('FOREIGN_RESOURCE_LIMIT');
-  const bytes=Buffer.alloc(limit+1);let size=0;
-  while(size<bytes.length) {const count=readSync(fd,bytes,size,bytes.length-size,null);if(count===0)break;size+=count;}
-  const after=inspectResource(path,'file',false,privateMode);
-  if(size>limit||!after||!sameResource(opened,after)||opened.size!==after.size||opened.mtimeMs!==after.mtimeMs)throw Error('FOREIGN_RESOURCE_CHANGED');
-  if(encoding==='utf8'&&!isUtf8(bytes.subarray(0,size)))throw Error('FOREIGN_RESOURCE_ENCODING');
-  return {text:bytes.toString(encoding,0,size),identity:{dev:opened.dev,ino:opened.ino}};
- } finally {closeSync(fd);}
+ for(let attempt=0;attempt<3;attempt++) {
+  const before=inspectResource(path,'file',false,privateMode);
+  const fd=openSync(path,constants.O_RDONLY|constants.O_NOFOLLOW|constants.O_NONBLOCK);
+  try {
+   const opened=fstatSync(fd);assertResource(opened,'file',privateMode,true);
+   if(opened.size>limit)throw Error('FOREIGN_RESOURCE_LIMIT');
+   // A rename can retire an already opened inode before fstat. Never read or
+   // return that unlinked handle; require a valid replacement and reopen it.
+   if(opened.nlink===0) {
+    const replacement=inspectResource(path,'file',false,privateMode);
+    if(!replacement||sameResource(opened,replacement))throw Error('FOREIGN_RESOURCE_CHANGED');
+    continue;
+   }
+   if(!before||!sameResource(before,opened))continue;
+   const bytes=Buffer.alloc(limit+1);let size=0;
+   while(size<bytes.length) {const count=readSync(fd,bytes,size,bytes.length-size,null);if(count===0)break;size+=count;}
+   if(size>limit)throw Error('FOREIGN_RESOURCE_LIMIT');
+   const finished=fstatSync(fd);assertResource(finished,'file',privateMode,true);
+   const after=inspectResource(path,'file',false,privateMode);
+   // Only an ordinary owned replacement permits another read. Linked, foreign
+   // or insecure paths fail inspection, and in-place mutation is never retried.
+   if(after&&!sameResource(opened,after))continue;
+   if(!after||finished.nlink!==1||opened.size!==size||opened.size!==after.size||opened.mtimeMs!==after.mtimeMs||opened.ctimeMs!==after.ctimeMs||opened.size!==finished.size||opened.mtimeMs!==finished.mtimeMs||opened.ctimeMs!==finished.ctimeMs)throw Error('FOREIGN_RESOURCE_CHANGED');
+   if(encoding==='utf8'&&!isUtf8(bytes.subarray(0,size)))throw Error('FOREIGN_RESOURCE_ENCODING');
+   return {text:bytes.toString(encoding,0,size),identity:{dev:opened.dev,ino:opened.ino}};
+  } finally {closeSync(fd);}
+ }
+ throw Error('FOREIGN_RESOURCE_CHANGED');
 }
 export function assertStateRoot(dir:string) {
  inspectResource(dir,'directory');

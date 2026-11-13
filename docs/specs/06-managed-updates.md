@@ -32,7 +32,7 @@ Automatic discovery requests bounded latest metadata once per six hours, persist
 
 `auto-update --disable` writes a separate durable marked private opt-out even while another writer is staging/draining. Readers immediately report disabled. No queued candidate activates while disabled, including an explicit manual candidate; `auto-update --enable` resumes eligible queued work. An automatic pending candidate is cancelled when the writer is available; a concurrent installation may finish staging but cannot activate. Enabling never resets discovery deadlines or failed-version suppression. `status` distinguishes package bootstrap required, source-checkout manual mode, and the managed active/pending/previous/error/check facts.
 
-## Explicit setup capability migration — source0.1.3, unpublished
+## Explicit setup capability migration — CLI0.1.4 and later
 
 `setup --yes` authorizes a specific owned CLI migration, not a global package,
 Node or official daemon upgrade and not a change to automatic-update policy.
@@ -48,7 +48,7 @@ enablement; no old npm fallback is accepted. Then active/bootstrap move to the
 capable package, previous/immutable packages and pair/custom-origin state remain,
 and the independent update opt-out still wins for future automatic updates.
 Source checkout without managed state instead binds its current own frontend.
-No publication is implied by the local0.1.3 source version.
+Actual publication and installation receipts are recorded in docs/STATE.md.
 
 All current config readers/resource validators/writers share524288bytes and
 reject an oversized serialized replacement before publication. Original request
