@@ -32,12 +32,17 @@ async function fixture(){
  child.on('message',message=>{if(message&&typeof message==='object'&&'kind' in message&&message.kind==='moremote-ready'&&'version' in message&&typeof message.version==='string'){readySeen=true;ready.resolve(message.version)}});
  child.once('error',error=>{done.reject(error);ready.reject(error)});child.once('exit',code=>{done.resolve(code);if(!readySeen)ready.reject(Error('DELEGATED_FRONTEND_EXITED_'+code))});void done.promise.catch(()=>{});void ready.promise.catch(()=>{});
  const waitReady=async(signal:AbortSignal)=>{const cancelled=Promise.withResolvers<never>();const abort=()=>cancelled.reject(signal.reason??Error('READINESS_CANCELLED'));if(signal.aborted)abort();else signal.addEventListener('abort',abort,{once:true});try{assert.equal(await Promise.race([ready.promise,cancelled.promise]),version);assert.equal((await requestControl(dir,'status'))?.version,version)}finally{signal.removeEventListener('abort',abort)}};
- const waitStopped=async()=>{await until(async()=>{try{await lstat(join(dir,'managed','supervisor.lock'));return false}catch(error){if((error as NodeJS.ErrnoException).code==='ENOENT')return true;throw error}},'SUPERVISOR_OWNERSHIP_NOT_RELEASED');assert.equal(await requestControl(dir,'status'),null);assert.equal(supervisorRunning(dir),false)};
+ let stopped=false;
+ const waitStopped=async()=>{await until(async()=>{try{await lstat(join(dir,'managed','supervisor.lock'));return false}catch(error){if((error as NodeJS.ErrnoException).code==='ENOENT')return true;throw error}},'SUPERVISOR_OWNERSHIP_NOT_RELEASED');assert.equal(await requestControl(dir,'status'),null);assert.equal(supervisorRunning(dir),false);stopped=true};
  async function close(){
   // The process group was created above and contains only this fixture's
   // wrapper/supervisor/runtime. Never signal a PID obtained from state files.
-  if(process.platform!=='win32'&&child.pid)try{process.kill(-child.pid,'SIGKILL')}catch(error){if((error as NodeJS.ErrnoException).code!=='ESRCH')throw error}
-  else if(child.exitCode===null&&child.signalCode===null)child.kill('SIGKILL');
+  // Once shutdown is independently proven, the old group ID is no longer an
+  // authority to signal anything; teardown must not require another group kill.
+  if(!stopped){
+   if(process.platform!=='win32'&&child.pid)try{process.kill(-child.pid,'SIGKILL')}catch(error){if((error as NodeJS.ErrnoException).code!=='ESRCH')throw error}
+   else if(child.exitCode===null&&child.signalCode===null)child.kill('SIGKILL');
+  }
   await bounded(done.promise,'FRONTEND_FIXTURE_EXIT_TIMEOUT');await rm(root,{recursive:true,force:true});
  }
  return {dir,version,child,exit:done.promise,waitReady,waitStopped,close};

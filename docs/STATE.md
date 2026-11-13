@@ -35,6 +35,11 @@
   into one ordered close-then-remove hook; preserve all behavior assertions and
   rerun the full matrix on the corrected test source. Production bytes are unchanged.
 
+- Corrected8e4e065 Windows cleanup passes; macOS then rejects signaling an
+  already stopped wrapper's old process group. Preserve independent lock/control/
+  supervisor/exit assertions and skip redundant group signaling only after those
+  shutdown proofs. All4actual local lifecycle consumers pass; narrow review agrees.
+
 - Exact tagv0.1.3 and its successful three-platform CI43380589650 are retained.
   Release43381419784 fails its full check before packaging/publication: concurrent
   normal runtime config replacement triggers FOREIGN_RESOURCE_LIMIT in a read.
