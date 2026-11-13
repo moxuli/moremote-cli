@@ -32,6 +32,31 @@ Automatic discovery requests bounded latest metadata once per six hours, persist
 
 `auto-update --disable` writes a separate durable marked private opt-out even while another writer is staging/draining. Readers immediately report disabled. No queued candidate activates while disabled, including an explicit manual candidate; `auto-update --enable` resumes eligible queued work. An automatic pending candidate is cancelled when the writer is available; a concurrent installation may finish staging but cannot activate. Enabling never resets discovery deadlines or failed-version suppression. `status` distinguishes package bootstrap required, source-checkout manual mode, and the managed active/pending/previous/error/check facts.
 
+## Explicit setup capability migration — source0.1.3, unpublished
+
+`setup --yes` authorizes a specific owned CLI migration, not a global package,
+Node or official daemon upgrade and not a change to automatic-update policy.
+The current frontend recognizes its `localEnrollment:1` capability and routes
+setup to selected code only when that selected package supports the same
+enrollment/config-bound capability. A retained public0.1.2 handler cannot swallow
+the command as unknown before the new handler runs.
+
+After stopping only the owned runtime/service and authenticating official
+identity, setup stages/verifies its exact current version when necessary.
+Unavailable current packages or missing capability fail before feature/cloud
+enablement; no old npm fallback is accepted. Then active/bootstrap move to the
+capable package, previous/immutable packages and pair/custom-origin state remain,
+and the independent update opt-out still wins for future automatic updates.
+Source checkout without managed state instead binds its current own frontend.
+No publication is implied by the local0.1.3 source version.
+
+All current config readers/resource validators/writers share524288bytes and
+reject an oversized serialized replacement before publication. Original request
+bytes are retained even when JSON control-character escaping expands them.
+This explicit capability migration does not assert that a directly invoked old
+128KiB config reader can consume larger state. Retained public frontends route
+subsequent commands to selected capable code rather than invoking old handlers.
+
 ## Compatibility and activation
 
 Every publish declares `moremote: {updateProtocol:1,journalSchema:1,wireProtocol:1}`. Both staging selection and the retained supervisor independently check this exact compatibility tuple. Missing/different compatibility remains pending with manualRequired and `UPDATE_MANUAL_COMPATIBILITY_REQUIRED`; it never drains or executes. Automatic-release validation also rejects another tuple. A compatible release MUST preserve all older retained versions' ability to read/write the same config/journal, mutation tombstones and wire lifecycle. A mere startup survival window cannot prove this property. Breaking storage/wire changes require a separately designed, owner-approved migration/release process; do not relabel an incompatible schema as1 or promise arbitrary downgrade safety. The existing FULL-sync journal, occurrence, revoke and no-replay contracts are unchanged.

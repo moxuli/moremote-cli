@@ -1,6 +1,121 @@
 # 05 — Endpoint and lifecycle behavior
 
-## Enrollment QR v1
+## Single-pairing local enrollment v1 — unreleased
+
+Normal users pair only official Paseo. Explicit `setup --yes` authenticates the
+existing official daemon, enables automatic enrollment/cloud and installs/starts
+only the existing owned CLI per-user service. Stop/reload only owned CLI state;
+preserve custom origin/target, active/revoked pairs and update preference. An
+absent API origin selects the built-in production HTTPS endpoint. Source checkout
+without managed state binds its current frontend and manual-update policy;
+installed packages/retained managed state use capability-aware exact-current
+setup migration before enabling enrollment, retaining prior packages and update
+opt-out while selecting an enrollment-capable active/bootstrap. Unavailable or
+incapable current packages fail explicitly without cloud opt-in. Manifest
+`localEnrollment:1` and `configBytes:524288` declare that capability.
+`check`, `status` and config reads remain passive. Manual `pair` is expert-only.
+No official modifications, new listener, hidden terminal/workspace, model prompt,
+new relay, global upgrade or package publication is part of this protocol.
+
+Discovery tree:
+
+```text
+<home>/.moremote-cli-connect/<sha256(UTF8 daemonServerId)>/
+  descriptor.json
+  requests/<request UUID>.json
+  responses/<request UUID>.json
+```
+
+Parent, daemon and request/response directories carry owned markers and are
+ordinary owned POSIX0700 directories. Descriptor/responses are0600. Requests
+created by the official file API may be0644 inside their private parent.
+Windows relies on the user profile ACL. Reject symlinks, hardlinks, foreign
+markers/users/types, response collisions and competing runtime ownership.
+One marked daemon directory binds to the exact CLI state directory. Its own
+exclusive PID/instance lock can be reclaimed only after the recorded process
+is dead; this lock never authorizes signalling another process. No new socket
+is created. Existing runtime ownership serializes config/cycle work.
+
+The app obtains the actual home through official `directory_suggestions_request`
+with query `~/././.`, preserving Windows path joining. A <=4096-byte descriptor is
+exactly:
+
+```text
+{version:1,daemonServerId,instanceId,apiOrigin,enabled,measuredAt,expiresAt}
+```
+
+`instanceId` is a lowercase UUID. Times are safe integer Unix milliseconds.
+`apiOrigin` is the configured/default validated canonical HTTPS origin, pinned
+over the already authenticated official file channel. Descriptor lifetime is90s,
+renewed no faster than30s; disablement can remove resources or publish disabled
+without granting a new enabled lease. This is not a cloud heartbeat.
+
+After validating the original authenticated host/session/generation and fresh
+descriptor, the app durably retains one exact immutable UTF-8 request before
+official create/read-revision/write. Empty files are unfinished creates, not
+admissions. Unknown outcomes read the same exact path and never mint another
+request identity. Request <=4096bytes:
+
+```text
+{version:1,id,clientId,daemonServerId,issuedAt,expiresAt}
+```
+
+IDs/client IDs are lowercase UUIDs; lifetime is at most600000ms, with no future
+issuance or expiry grace. At most16 files are consumed per cycle with a rotating
+cursor, and the existing16-pair ceiling remains. A durable record saves exact
+bytes/fingerprint, original pair/canonical offer and exact cloud-create JSON
+before I/O. Lost creation acknowledgements retry those identical bytes through
+the unchanged relay's exact-offer-digest idempotency. A confirmed creation is
+saved before any secret response. Changed bytes/client/daemon/expiry cannot
+replace authority. A client with a current live endpoint cannot manufacture
+another by changing its request ID. Old exact revoked/retired requests remain
+disabled; an explicit fresh app Enable request can create a new independent
+endpoint after retirement. Existing pairs are never reused or revived.
+
+At most one cloud-create attempt runs per serialized cycle, independently aborted
+after3s; no optional admission may accumulate sixteen20s cloud waits ahead of an
+existing phone's commands. Requests retain original authority across that abort.
+
+Response <=8192bytes:
+
+```text
+{version:1,id,clientId,daemonServerId,expiresAt,status,offer?,code?}
+```
+
+Status vocabulary is `pending|offer|active|disabled|error`. Only `offer` carries
+the original canonical version1 offer defined below. Its origin must exactly
+match the authenticated descriptor pin. Response expiry never exceeds either
+original request or offer expiry. Pending/unknown cloud creation has no secret
+response. Invalid/conflicting/foreign files fail closed without overwriting
+them; the normal runtime reports only a redacted cycle failure. Disabled/retired
+admitted requests can receive a nonsecret disabled response. The app stages and
+claims automatically, without an offer-review screen, using the unchanged
+phoneHello/companionHello proof and independently verified daemon identity.
+
+Activation removes the owned request/private response. Expiry removes them and
+their durable enrollment record; existing pair/audit retirement is unchanged.
+Stop removes only owned responses/descriptor/lock, retaining exact request/pair
+authority for restart until original expiry. Explicit cloud-off removes secret
+responses and never creates another pair. Automatic observation is bounded by
+the app to10 response reads over at most30s; a later foreground refresh retains
+the same exact request. No forever polling, recursive requests or cloud pairing
+on each launch.
+
+Implementation APIs are `LocalEnrollment.cleanup/cycle/close`,
+`EnrollmentFiles`/`discoveryDirectory`, `setupEnrollment`, and the explicit
+`EnrollmentRequest`, `EnrollmentOffer`, `EnrollmentRecord`,
+`EnrollmentDescriptor`, `EnrollmentResponse` types. All test homes/storage and
+service lifecycle I/O are injectable; tests never create discovery in real HOME
+or implicitly register a real service. Focused isolated consumers live in
+`tests/local-enrollment.test.ts` and `tests/setup-command.test.ts`; they are
+verification instructions, not a claim of execution.
+
+Config/resource readers and atomic writers use the same524288-byte serialized
+bound, preserving full original request bytes. Oversize writes reject before
+replacement. Only acquired runtime ownership initializes fresh config; duplicate
+`run` never writes an old loaded config over live enrollment.
+
+## Expert-only manual enrollment offer v1
 
 Canonical offer is compact UTF-8 JSON with exactly {version:1,apiOrigin,pairId,enrollmentToken,rootKey,expiresAt}. pairId is a lowercase UUID; token/rootKey are independently random canonical unpadded-base64url32-byte values. The ten-minute original expiry bounds claim, both proofs and activation; a claim just before the deadline does not extend it. Default QR/link is moremote://enhance# plus unpadded-base64url of those exact JSON bytes. --json emits raw JSON. The fragment never reaches an HTTP origin. Consumers reject extras, unsupported versions, expired/noncanonical offers and origin changes; HTTPS except explicit loopback development. The secret QR is explicit output, never diagnostics.
 

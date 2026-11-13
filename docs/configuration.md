@@ -8,19 +8,65 @@ Each pairing retains its explicit API origin through retirement. Local revokedAt
 
 MOREMOTE_CLI_HOME or --data-dir overrides platform state defaults: ~/Library/Application Support/MoRemoteCLI on macOS, LOCALAPPDATA/MoRemoteCLI on Windows, XDG_STATE_HOME/moremote-cli (fallback ~/.local/state/moremote-cli) on Linux. PASEO_HOME selects the official read-only home, PASEO_PASSWORD matches official CLI password precedence. Only paseo.pid and local-credential are read under the official home, only at an explicit connection. No credential discovery scans or official writes. The unpublished former moremote-companion identity has no command/env aliases or automatic state adoption.
 
-Unreleased onboarding: explicit `pair` is cloud consent. It uses
-`https://moremote-cloud-ingress.pages.dev` only when `apiOrigin` is absent,
-validates the selected origin under the existing TLS/explicit-loopback rules,
-and connects to the selected official daemon before durably enabling cloud and
-creating a fresh one-phone offer. Existing custom target/origin and retained
-per-pair origins/keys/revocation remain unchanged. Without an explicit target,
-the existing `paseo.pid` listen address and matching local credential are reused;
-no second relay, official password setup or official file change is required.
-`configure` remains available for advanced targets/origins. Loading config,
-`check` and `status` do not select a default origin, enable cloud or enroll;
-`check --connect` only connects read-only to official Paseo. Pairing never
-installs a service. Published0.1.2 still requires explicit origin/cloud
-configuration before pairing; this source delta is not published.
+Unreleased single-pairing onboarding uses explicit `setup --yes`: stop only the
+owned CLI runtime/service, reload its latest configuration, authenticate the
+existing official daemon and preserve its exact identity, then enable cloud and
+local enrollment before installing/starting the existing owned service.
+Configured custom HTTPS origin/target, existing active/revoked phones and update
+policy are preserved. An absent origin selects
+`https://moremote-cloud-ingress.pages.dev`. Source checkout without managed state
+binds its own current frontend and stays manual-update. Installed packages and
+retained managed state use capability-aware setup: if selected code predates
+enrollment, explicit setup installs/verifies the exact current version before
+enabling the feature, then moves active/bootstrap while retaining previous
+packages, pairs/custom origin and the independent auto-update opt-out.
+`SETUP_CURRENT_PACKAGE_UNAVAILABLE`/`SETUP_CAPABILITY_REQUIRED` are failures,
+never enabled success or an older-package fallback. Nothing patches/upgrades
+official Paseo or global tools. Source0.1.3 is not published by this change.
+
+Optional schema-1 fields are `localEnrollment:{home:<absolute user home>}` and
+at most16 `enrollmentRequests`. Only explicit setup supplies that home; ordinary
+`run`/tests with legacy configuration never create discovery in the real HOME.
+Each durable record stores the exact request bytes, SHA256 fingerprint, parsed
+request, original pair/offer, exact cloud-create JSON bytes and confirmed-create
+flag. Per-pair `automaticClientId` and `automaticRequestId` retain app/request
+identity without replacing an old pair. Runtime-cycle ownership serializes all enrollment/config changes;
+there is no second config writer or background watcher.
+
+Config reads, owned-resource validation and atomic writes share a524288-byte
+bound, including the serialized trailing newline. This accommodates16 maximum
+4096-byte requests even when literal tab/newline bytes expand during JSON
+serialization. Oversize writes fail before replacing any config. Fresh `run`
+initializes config only after acquiring runtime ownership; duplicate `run`
+refuses without rewriting a live enrollment snapshot.
+
+The private tree is `<home>/.moremote-cli-connect/<sha256(UTF8 daemonServerId)>/`;
+its parent/host/request/response directories have owned markers and POSIX0700.
+Descriptor and secret responses are0600; official-created requests may be0644
+inside the private request directory. Reject links, foreign markers/owners,
+collisions and competing runtime locks before cloud creation. Windows relies on
+the user-profile ACL. Only this owned local tree is written, not official files.
+The app gets the real home via official directory suggestions, never a guessed
+path. Descriptor includes the configured/default validated HTTPS `apiOrigin`,
+which pins the original canonical offer's origin.
+
+Unchanged request bytes resume the same endpoint and idempotent create bytes
+through lost acknowledgements/restarts; changed bytes/client/daemon/expiry fail
+closed. No more than16 request files are consumed per cycle and no more than16
+pairs exist. At most one optional cloud-create attempt runs per cycle with its
+own3s abort deadline; existing phones retain ordinary controls/command handling.
+Descriptor lifetime90s/renewal30s; request/offer lifetime at most600s.
+Activation/expiry removes private responses, expiry removes durable request
+records. An old exact request remains disabled after revocation; only the app's
+explicit fresh Enable request may create a new endpoint after prior retirement.
+Full schemas and ownership behavior:
+[single-pairing contract](specs/05-endpoint-and-lifecycle.md#single-pairing-local-enrollment-v1-unreleased).
+
+Loading config, `check` and `status` do not create discovery, enable cloud,
+select an origin, enroll or install a service; `check --connect` is read-only.
+Manual `pair` remains expert-only and installs no service. Published0.1.2 lacks
+`setup` and still requires explicit origin/cloud configuration before manual
+pairing; this source delta is not published.
 
 ## Central limits (src/limits.ts)
 

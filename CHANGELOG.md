@@ -1,7 +1,12 @@
 # Changelog
 
-## Unreleased
+## Unreleased — source 0.1.3 (not published)
 
+- Refuse duplicate `run` before any config rewrite; initialize fresh runtime config only after ownership. Keep setup's load/authenticate/save under the same cross-process ownership after package preparation, so a concurrent run cannot lose newer endpoint state. Unify config readers/writers at524288bytes and reject oversize serialized writes without replacing state.
+- Make `setup` reachable through a new capability-aware frontend when retained public0.1.2 lacks it; explicitly select verified exact-current enrollment-capable owned runtime/bootstrap while preserving pairs/custom origin/update opt-out. Unavailable current packages fail without reporting enabled.
+- Bound automatic enrollment to one optional cloud-create attempt per cycle with an independent3s abort deadline, retaining original durable retry bytes and existing phone control cadence.
+- Add explicit `setup --yes` and private single-pairing discovery over the already authenticated official file channel; ordinary users no longer scan or paste a second enhancement offer. Preserve custom origins, existing pairs/revocation and managed-update opt-out.
+- Persist bounded immutable request fingerprints, original per-phone offers and exact cloud-create bytes before I/O; resume identical requests across ownership-safe restarts, remove private responses on activation/expiry, and keep checks/status passive. Source-checkout setup binds its current owned frontend instead of downloading an older public runtime.
 - Make explicit `pair` the cloud opt-in and default to the production endpoint only when no origin is configured; reuse existing official local discovery without changing custom targets, per-phone authority or service installation.
 - Include genuine provider and creation time with last-user time in encrypted task snapshots and meaningful widget fingerprints; retain absent user recency rather than using assistant updates.
 

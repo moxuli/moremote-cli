@@ -3,8 +3,10 @@ import { dirname, basename, join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { DatabaseSync } from 'node:sqlite';
 import { createHash, randomUUID } from 'node:crypto';
+import {isUtf8} from 'node:buffer';
 
 export const JOURNAL_APPLICATION_ID=0x4d524331;
+export const CONFIG_BYTES=524288;
 export const RUNTIME_OWNER='MoRemote CLI runtime';
 export interface ResourceIdentity {dev:number;ino:number}
 export interface RuntimeOwner {
@@ -29,16 +31,17 @@ export function inspectResource(path:string,kind:'file'|'directory'|'socket',opt
  if(privateMode&&process.platform!=='win32'&&((stat.mode&0o7077)!==0||(stat.mode&(kind==='directory'?0o700:0o600))!==(kind==='directory'?0o700:0o600)))throw Error('FOREIGN_RESOURCE_MODE');
  return stat;
 }
-export function readPrivateText(path:string,limit:number,encoding:'utf8'|'utf16le'='utf8') {
- const before=inspectResource(path,'file');
+export function readPrivateText(path:string,limit:number,encoding:'utf8'|'utf16le'='utf8',privateMode=true) {
+ const before=inspectResource(path,'file',false,privateMode);
  const fd=openSync(path,constants.O_RDONLY|constants.O_NOFOLLOW|constants.O_NONBLOCK);
  try {
   const opened=fstatSync(fd);
   if(!before||!sameResource(before,opened)||!opened.isFile()||opened.nlink!==1||opened.size>limit)throw Error('FOREIGN_RESOURCE_LIMIT');
   const bytes=Buffer.alloc(limit+1);let size=0;
   while(size<bytes.length) {const count=readSync(fd,bytes,size,bytes.length-size,null);if(count===0)break;size+=count;}
-  const after=inspectResource(path,'file');
+  const after=inspectResource(path,'file',false,privateMode);
   if(size>limit||!after||!sameResource(opened,after)||opened.size!==after.size||opened.mtimeMs!==after.mtimeMs)throw Error('FOREIGN_RESOURCE_CHANGED');
+  if(encoding==='utf8'&&!isUtf8(bytes.subarray(0,size)))throw Error('FOREIGN_RESOURCE_ENCODING');
   return {text:bytes.toString(encoding,0,size),identity:{dev:opened.dev,ino:opened.ino}};
  } finally {closeSync(fd);}
 }
@@ -140,10 +143,12 @@ export function writePrivateAtomic(path:string,value:unknown):ResourceIdentity {
  const dir=dirname(path),name=basename(path);
  assertStateRoot(dir);
  if(name!=='config.json'&&name!=='runtime.json'&&name!=='runtime.lock')throw Error('FOREIGN_RESOURCE_NAME');
+ const bytes=JSON.stringify(value)+'\n';
+ if(name==='config.json'&&Buffer.byteLength(bytes)>CONFIG_BYTES)throw Error('CONFIG_LIMIT');
  const before=inspectResource(path,'file',true);
  if(before) {if(name==='runtime.lock')readRuntimeOwner(path);else assertStateResource(dir,name);}
  const temp=path+'.'+randomUUID()+'.tmp';
- const identity=createPrivateFile(temp,JSON.stringify(value)+'\n');
+ const identity=createPrivateFile(temp,bytes);
  try {
   const current=inspectResource(path,'file',true);
   if(before?(!current||!sameResource(before,current)):current!==null)throw Error('FOREIGN_RESOURCE_CHANGED');
@@ -177,7 +182,7 @@ export function assertStateResource(dir:string,name:string) {
   if(!runtime.staged||runtime.staged.path!==path)throw Error('RUNTIME_UNPROVEN_STAGE');return;
  }
  if(name==='config.json'||/^config\.json\.[0-9a-f-]{36}\.tmp$/.test(name)) {
-  const value:unknown=JSON.parse(readPrivateText(path,131072).text);
+  const value:unknown=JSON.parse(readPrivateText(path,CONFIG_BYTES).text);
   if(!object(value)||value.version!==1||typeof value.clientId!=='string'||!value.clientId.startsWith('moremote-cli-')||value.clientId.length>256)throw Error('FOREIGN_CONFIG');return;
  }
  if(/^runtime\.json\.[0-9a-f-]{36}\.tmp$/.test(name)) {readRuntimeRecord(path);return;}

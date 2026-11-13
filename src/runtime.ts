@@ -14,6 +14,8 @@ import {projectSnapshot} from './projection.js';
 import {ownRuntime} from './control.js';
 import {LIMITS,object} from './limits.js';
 import {ActivityPublisher,ActivityWorkLane,widgetFingerprint} from './activity.js';
+import {LocalEnrollment} from './local-enrollment.js';
+import {inspectResource} from './resources.js';
 function stableId(value:unknown){const h=createHash('sha256').update(JSON.stringify(value)).digest('hex').slice(0,32);return h.slice(0,8)+'-'+h.slice(8,12)+'-'+h.slice(12,16)+'-'+h.slice(16,20)+'-'+h.slice(20)}
 export async function queueAttention(journal:OperationJournal,pair:Pair,event:Attention&{sourceFingerprint?:string;occurrence?:Occurrence},now=Date.now()){
  if(event.timestamp+LIMITS.snapshotMs<=now||event.timestamp>now+LIMITS.futureMs)return;
@@ -44,7 +46,9 @@ export async function runRuntime(dir:string,version?:string){
  let detach:(()=>void)|undefined,closeJournal:(()=>void)|undefined;
  const release=await ownRuntime(dir,()=>({stage,lastError,activePairs,version:version??null}),stop);
  const activityLane=new ActivityWorkLane();let activityFailure:unknown=null,activityPairCursor=0;
+ const enrollment=new LocalEnrollment(dir);
  try{
+ if(!inspectResource(join(dir,'config.json'),'file',true))await saveConfig(dir,await loadConfig(dir));
  const journal=new OperationJournal(join(dir,'journal.sqlite'));closeJournal=()=>journal.close();
  if(process.send){process.on('message',parentMessage);process.on('disconnect',parentGone);if(!process.connected)parentGone();else process.send({kind:'moremote-ready'},undefined,undefined,()=>{})}
  const attentionQueue:Attention[]=[];let backoff:number=LIMITS.pollMs;let measuredAt=0;let snapshot:Awaited<ReturnType<OfficialClient['snapshot']>>|undefined;
@@ -54,6 +58,7 @@ export async function runRuntime(dir:string,version?:string){
  while(!stopped&&!draining){try{
  const now=Date.now();journal.cleanup(now);const config=await loadConfig(dir);pollOrigins.clear();let failure:unknown=activityFailure;activityFailure=null;let acquisitionFailed=false;const clouds=new Map<string,CloudClient>();const cycleFences=new Map<string,CloudRetryState>();
  for(const pair of config.pairs){const revokedAt=journal.revocationTime(pair.pairId);if(revokedAt!==undefined&&pair.revokedAt===undefined){pair.active=false;pair.revokedAt=revokedAt;await saveConfig(dir,config)}if(pair.relayRetiredAt!==undefined)pair.active=false}
+ try{await enrollment.cleanup(config)}catch(error){failure=error}
  // Prune before any request: a retained 404 must not extend automatic recovery.
  if(pruneRetiredPairs(config,now,journal))await saveConfig(dir,config);journal.cleanupRevocations(config.pairs.map(p=>p.pairId),now);
  for(const pairId of statePublications.keys())if(!config.pairs.some(pair=>pair.pairId===pairId))statePublications.delete(pairId);
@@ -61,6 +66,7 @@ export async function runRuntime(dir:string,version?:string){
  for(const origin of retryStates.keys())if(!config.pairs.some(pair=>(pair.apiOrigin||config.apiOrigin)===origin))retryStates.delete(origin);
  // Endpoint revocation must work even when the official daemon is offline.
  if(config.cloudEnabled)for(const pair of config.pairs){if(stopped)break;const origin=pair.apiOrigin||config.apiOrigin;if(!origin||(!pair.active&&pair.revokedAt===undefined&&pair.relayRetiredAt===undefined&&pair.expiresAt!==undefined&&pair.expiresAt<=Date.now()))continue;
+ if(config.enrollmentRequests?.some(record=>record.pairId===pair.pairId&&!record.created))continue;
  pollOrigins.add(origin);let retryState=retryStates.get(origin);if(!retryState){retryState={};retryStates.set(origin,retryState)}
  let cycleFence=cycleFences.get(origin);if(!cycleFence){cycleFence={};cycleFences.set(origin,cycleFence)}
  const cloud=new CloudClient(origin,pair.pairId,pair.hostToken,config.allowLoopbackHttp,fetch,controller.signal,retryState,cycleFence);let controlsVerified=true;
@@ -73,6 +79,12 @@ export async function runRuntime(dir:string,version?:string){
  }
  if(stopped)break;
  if(!official||!official.sdk.isConnected){detach?.();await official?.close().catch(()=>{});stage='connecting';official=new OfficialClient(config,journal);await official.connect();const serverId=official.info()!.serverId;if(!config.daemonServerId){config.daemonServerId=serverId;await saveConfig(dir,config)}detach=official.onAttention(event=>{if(attentionQueue.length<500)attentionQueue.push(event);else lastError='ATTENTION_QUEUE_LIMIT'});measuredAt=0;}
+ try{await enrollment.cycle(config,official.info()!.serverId,pair=>{
+  const origin=pair.apiOrigin||config.apiOrigin!;pollOrigins.add(origin);
+  let retry=retryStates.get(origin);if(!retry){retry={};retryStates.set(origin,retry)}
+  let fence=cycleFences.get(origin);if(!fence){fence={};cycleFences.set(origin,fence)}
+  return new CloudClient(origin,pair.pairId,pair.hostToken,config.allowLoopbackHttp,fetch,controller.signal,retry,fence);
+ })}catch(error){failure=error}
  if(snapshot===undefined||Date.now()-measuredAt>=30000){snapshot=await official.snapshot();measuredAt=snapshot.measuredAt}
  stage=config.cloudEnabled?'cloud-enabled':'local-only';activePairs=config.pairs.filter(p=>p.active&&p.relayRetiredAt===undefined&&!journal.pairRevoked(p.pairId)).length;const events=attentionQueue.splice(0);
  // Persist every active phone's events before the first network send.
@@ -114,6 +126,7 @@ export async function runRuntime(dir:string,version?:string){
  try{for(const envelope of await cloud.commands()){if(stopped||cycleFences.get(cloud.origin)?.error)break;try{await executeOperation({pair,journal,official,cloud,clock:Date.now},envelope)}catch(error){failure=error}}}
  catch(error){failure=error;if(!await observeRelayRetirement(config,dir,pair,cloud,error)&&!retryPaused(error))acquisitionFailed=true}
  }catch(error){failure=error;if(!await observeRelayRetirement(config,dir,pair,cloud,error)&&!retryPaused(error))acquisitionFailed=true}}
+ try{await enrollment.cleanup(config)}catch(error){failure=error}
  if(failure){lastError=failure instanceof CloudError?failure.code:'CLI_CYCLE_FAILED';stage='degraded';backoff=acquisitionFailed?Math.min(backoff*2,LIMITS.maxBackoffMs):LIMITS.pollMs}else{lastError=null;backoff=LIMITS.pollMs}
  }catch(error){lastError=error instanceof CloudError?error.code:'CLI_CYCLE_FAILED';stage='degraded';backoff=retryPaused(error)?LIMITS.pollMs:Math.min(backoff*2,LIMITS.maxBackoffMs)}
  // Pauses are shared only by relay origin, never reset by a cached rejection.
@@ -124,5 +137,5 @@ export async function runRuntime(dir:string,version?:string){
  if(Number.isFinite(retryWake)&&retryWake>wakeNow)backoff=Math.max(backoff,retryWake-wakeNow);
  if(draining)break;
  await sleep(backoff,undefined,{signal:AbortSignal.any([controller.signal,drainWake.signal])}).catch(()=>{});
- }}finally{process.removeListener('SIGINT',stop);process.removeListener('SIGTERM',stop);process.removeListener('message',parentMessage);process.removeListener('disconnect',parentGone);try{await activityLane.close();detach?.();await official?.close().catch(()=>{})}finally{try{closeJournal?.()}finally{await release()}}}
+ }}finally{process.removeListener('SIGINT',stop);process.removeListener('SIGTERM',stop);process.removeListener('message',parentMessage);process.removeListener('disconnect',parentGone);try{await activityLane.close();detach?.();await official?.close().catch(()=>{})}finally{try{enrollment.close()}finally{try{closeJournal?.()}finally{await release()}}}}
 }

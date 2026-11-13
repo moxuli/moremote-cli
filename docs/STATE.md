@@ -4,6 +4,45 @@
 
 Owner-approved notification/scoped delivery and local activity/widget integration; Apache-2.0. Standalone Node24 companion targeting inspected official SDK/protocol0.15.3. Existing iOS protocol-vector floor is independent and unchanged. OpenUI and broader system extensions remain outside this scope.
 
+## Unreleased single-pairing enrollment — source0.1.3, locally accepted
+
+- Official Paseo pairing is the only normal user pairing. Explicit
+  `setup --yes` prepares the optional owned CLI service; a connected native
+  client exchanges the existing per-phone offer through official authenticated
+  file APIs. No second QR, pasted invitation, terminal command or new relay
+  configuration is required in the app.
+- Discovery is private and bounded; original request identity/expiry, canonical
+  offer and cloud-create bytes are durable before network I/O. Activation and
+  expiry remove the private handoff. Revocation, retained active phones, custom
+  origin, daemon pinning and managed-update opt-out remain authoritative.
+- Confirmed review findings are fixed: duplicate runtime startup never rewrites
+  configuration; setup prepares packages before acquiring shared runtime
+  ownership, then holds it across load/authenticate/save. A concurrent runtime
+  either wins before config loading or is refused. Config readers/writers share
+  the524288-byte encoded bound; old managed0.1.2 setup selects a verified
+  enrollment-capable current package instead of silently enabling old code.
+- Optional admission performs at most one cloud-create attempt per cycle with
+  its own3-second deadline. Unknown results retain exact retry bytes. No cloud
+  endpoint, recursive dispatch, polling budget or production deployment changes.
+- Node24.13.0 typecheck passes. The final six-file selection passes37/38;
+  its remaining source-setup assertion incorrectly demanded absence of an
+  internal managed directory. That implementation-detail assertion is removed,
+  while actual package-manager refusal and service-entry checks remain. The
+  corrected consumer passes independently and the compiled build passes.
+  Both new setup/runtime interleavings failed before the ownership correction.
+- Actual unmodified official Paseo0.15.4 and the native transport exchange the
+  canonical offer, verify the real native claim and unchanged activation proof,
+  and remove exact private request/response files. One cloud-create body and
+  zero official agents are observed. The cloud is a local in-process test
+  double; this is not production, physical-device or APNs acceptance.
+- Independent-context source re-review closes the scoped native/CLI findings.
+  The weaker same-provider route is explicit; unavailable external native
+  reviews are not approvals. Temporary probe code/state are removed, with
+  redacted receipts retained outside the repository.
+- Source0.1.3 remains unpublished. Public0.1.2, shared production and existing
+  official data are unchanged. No npm tag, TestFlight upload or phone install
+  is implied.
+
 ## Unreleased Share-first onboarding delta — locally verified
 
 - Approved cross-repository plan: MoRemote

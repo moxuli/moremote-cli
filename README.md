@@ -21,7 +21,7 @@ alone stays manual. No command starts/upgrades the official daemon.
 
 ## Build and foreground use
 
-Requires Node **24.13.0 or later on Node 24** and npm. No installer scripts or service registration run during setup.
+Requires Node **24.13.0 or later on Node 24** and npm. Dependency installation and builds do not register a service; only explicit lifecycle commands do.
 
 ```sh
 npm ci --ignore-scripts
@@ -34,42 +34,64 @@ node bin/moremote-cli.js run
 
 The example endpoint is synthetic. Omit `--target` to use the official `paseo.pid` listen address under `PASEO_HOME` (otherwise the platform home’s `.paseo`). Auth follows the official CLI: target password, then `PASEO_PASSWORD`, otherwise a rotating local credential only when the selected target exactly matches the pid listen address after official normalization. Credentials are never printed or uploaded. No automatic daemon start or upgrade.
 
-## Connect to the hosted MoRemote service
+## Connect once through official Paseo — unreleased source
 
-The following zero-configuration pairing flow is **unreleased source behavior**.
-Published0.1.2 still requires
-`moremote-cli configure --api-origin https://moremote-cloud-ingress.pages.dev --cloud-on`
-before pairing.
+The single-pairing flow below is unreleased **source 0.1.3**, not published
+0.1.2. The source version change is not a package publication or production enrollment.
 
-With the official Paseo daemon already running, explicitly enroll a phone:
+With the official Paseo daemon already running:
 
 ```sh
-moremote-cli pair
-moremote-cli run
+moremote-cli setup --yes
 ```
 
-Scan the private one-use offer in MoRemote's system integration setup. Keep
-`run` in the foreground, or separately choose background installation with
-`moremote-cli service install --yes`. Pairing itself never installs a service.
-Explicit `pair` enables cloud participation and uses the built-in production
-endpoint only when no API origin is configured. Existing custom origins,
-targets and per-phone authority are preserved; `configure` remains available
-for advanced setup. The official connection is discovered from its existing
-local listen address and credential, not a second chat relay or password.
-Plain configuration loads, `check` and `status` never opt in or enroll a phone;
-only `check --connect` performs a read-only official connection.
-Production TestFlight tokens use production APNs, not a sandbox backend.
+This explicit command authenticates the existing official daemon, enables cloud
+and automatic local enrollment, and installs/starts only the CLI's owned per-user
+background service. It preserves configured targets/custom HTTPS origins, active
+and revoked phones, and existing update preferences. With no origin configured,
+it selects `https://moremote-cloud-ingress.pages.dev`. It never starts, modifies
+or upgrades Paseo or global tools. Source-checkout setup without managed state
+binds the current source frontend and retains manual updates. Installed packages
+or retained managed state require an enrollment-capable runtime: explicit setup
+can install the exact current CLI version into owned private state, preserving
+the automatic-update opt-out. A missing current package/capability fails clearly
+before enabling enrollment, never by substituting old public code. The immutable
+old package stays retained; its selected runtime/bootstrap move to capable code.
 
+Pair the computer **only in official Paseo**. A compatible MoRemote app uses
+that already authenticated connection's ordinary file channel to discover the
+optional CLI and enroll its own phone automatically, even before a workspace
+exists. There is no second QR, paste field, terminal, hidden workspace or relay.
+Missing installation appears only in the enhancement surface. A previously
+disabled/revoked phone is not silently re-enabled.
 
-For a separately operated relay:
+Discovery is private local state under
+`<home>/.moremote-cli-connect/<sha256(daemonServerId)>/`. Descriptor origins are
+pinned through that authenticated file channel; each bounded immutable request
+gets its original per-phone offer and unchanged endpoint proof handshake. Secret
+responses are never printed and are removed on activation/expiry. See the
+[complete version-1 contract](docs/specs/05-endpoint-and-lifecycle.md#single-pairing-local-enrollment-v1-unreleased).
+
+For an advanced custom authority, configure it before explicit setup:
 
 ```sh
-node bin/moremote-cli.js configure --api-origin https://relay.example.test --cloud-on
-node bin/moremote-cli.js pair
-node bin/moremote-cli.js run
+moremote-cli configure --api-origin https://relay.example.test
+moremote-cli setup --yes
 ```
 
-`pair` explicitly prints a **secret**, ten-minute, one-phone QR/link. Do not share screenshots or put it in logs. `--json` emits the canonical offer for explicit paste. It waits for the one-use claim and verifies the phone’s encrypted proof before activating that phone, within the original offer deadline. Each phone gets its own local 32-byte root key; only the phone receives it, never the relay. See [wire contracts](docs/specs/02-encrypted-delivery.md), [endpoint controls](docs/specs/04-control-and-receipt-lifecycle.md) and [endpoint behavior](docs/specs/05-endpoint-and-lifecycle.md).
+Plain config loads, `check` and `status` stay passive; only `check --connect`
+makes a read-only official connection. They do not enable cloud, enroll a phone,
+create discovery or install a service.
+
+### Expert-only manual enrollment
+
+`moremote-cli pair` remains an explicit expert tool, not the normal app flow.
+It prints a **secret**, ten-minute, one-phone QR/link (`--json` prints canonical
+offer JSON), enables cloud on the configured/default origin and waits for the
+original encrypted claim/activation proof. Never share screenshots or log its
+output. It installs no service. Existing custom origins and per-phone authority
+remain unchanged. Published 0.1.2 requires explicit origin/cloud configuration
+before using that legacy manual path.
 
 ## Optional activities and widget reloads — unreleased source
 
@@ -108,6 +130,7 @@ Endpoint cancellation/revocation uses authenticated encrypted controls and durab
 ## Lifecycle and ownership
 
 - `status` and `check` are redacted. Only explicit `check --connect` contacts the selected official daemon (read-only).
+- `setup --yes`: explicit automatic-enrollment/cloud opt-in plus only the owned per-user background service; no second user pairing or official changes. Existing custom authorities, phone records and update opt-out survive.
 - `service-install --yes`: explicit per-user LaunchAgent on macOS, systemd user unit on Linux, or least-privilege interactive-user **logon task** on Windows (not an administrator Windows Service). Foreground `run` needs none of these. No sudo/admin installation.
 - `stop`: stop only the owned companion registration/runtime; never signal an official process. Linux/Windows registration remains available for a future login; macOS bootout leaves its owned plist available for explicit reinstallation.
 - `unpair --pair-id <exact-id>`: revoke one phone, leaving other phones unchanged. Stop the runtime first.

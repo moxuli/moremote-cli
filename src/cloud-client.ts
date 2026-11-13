@@ -61,7 +61,7 @@ export class CloudClient{
  }return result;
  }
  private path(suffix=''){return '/pairs/'+this.pairId+suffix}
- create(body:unknown){return this.request('POST','/pairs',body)}
+ create(body:unknown,signal?:AbortSignal){return this.request('POST','/pairs',body,signal)}
  pair(){return this.request('GET',this.path())}
  activate(body:unknown){return this.request('POST',this.path('/activate'),body)}
  revoke(){return this.request('DELETE',this.path())}
