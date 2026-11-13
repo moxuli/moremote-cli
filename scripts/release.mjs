@@ -12,7 +12,9 @@ function identity(value){
  assert.equal(value.repository.url,'git+https://github.com/moxuli/moremote-cli.git');
  assert.deepEqual(value.bin,{'moremote-cli':'bin/moremote-cli.js'});assert.equal(value.engines.node,'>=24.13.0 <25');
  assert.equal(value.publishConfig.registry,'https://registry.npmjs.org');assert.equal(value.publishConfig.access,'public');
- assert.deepEqual(value.moremote,{updateProtocol:1,journalSchema:1,wireProtocol:1},'Automatic release requires rollback-compatible storage/wire protocol');
+ const {updateProtocol,journalSchema,wireProtocol}=value.moremote??{};
+ assert.deepEqual({updateProtocol,journalSchema,wireProtocol},{updateProtocol:1,journalSchema:1,wireProtocol:1},'Automatic release requires rollback-compatible storage/wire protocol');
+ assert.deepEqual(value.moremote,pkg.moremote,'Packaged capabilities must match the reviewed source manifest');
 }
 assert.match(tag??'',/^v(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$/,'Only stable exact vX.Y.Z tags are released');
 assert.equal(tag,'v'+pkg.version);identity(pkg);

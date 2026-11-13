@@ -84,7 +84,14 @@ export async function enrollmentFixture(t:TestContext){
  await mkdir(paseoHome,{mode:0o700});const pid=JSON.stringify({pid:12345,listen:'127.0.0.1:'+address.port}),credential=Buffer.alloc(32,7).toString('base64url');
  await writeFile(join(paseoHome,'paseo.pid'),pid);await writeFile(join(paseoHome,'local-credential'),credential);
  const config=await loadConfig(state);config.paseoHome=paseoHome;config.apiOrigin=origin;config.target='tcp://127.0.0.1:'+address.port+'?password=synthetic-enrollment-password';await saveConfig(state,config);
- const authenticate=async(current:typeof config)=>{const connection=new OfficialClient(current);try{await connection.connect();return {serverId:connection.info()!.serverId}}finally{await connection.close()}};
+ const authenticate=async(current:typeof config)=>{
+  // Select synthetic credentials without inheriting the operator's password.
+  // OfficialClient consumes this environment value synchronously at construction.
+  const inherited=process.env.PASEO_PASSWORD;let connection:OfficialClient;
+  try{delete process.env.PASEO_PASSWORD;connection=new OfficialClient(current)}
+  finally{if(inherited===undefined)delete process.env.PASEO_PASSWORD;else process.env.PASEO_PASSWORD=inherited}
+  try{await connection.connect();return {serverId:connection.info()!.serverId}}finally{await connection.close()}
+ };
  let stopped=0,installed=0;
  const setup=async()=>setupEnrollment(state,{yes:true,home,stopOwned:async()=>{stopped++},authenticate,install:async()=>{installed++}});
  const fetcher:typeof fetch=(input,init)=>{const url=new URL(String(input));assert.equal(url.origin,origin);return fetch('http://127.0.0.1:'+relayAddress.port+url.pathname,init)};

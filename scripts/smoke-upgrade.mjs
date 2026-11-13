@@ -24,6 +24,16 @@ function track(child){
  child.once('error',error=>{done.reject(error);ready.reject(error)});child.once('exit',(code,signal)=>{done.resolve({code,signal});if(!readySeen)ready.reject(Error('CHILD_EXITED_BEFORE_READY_'+code))});void done.promise.catch(()=>{});void ready.promise.catch(()=>{});return record;
 }
 function alive(record){return record.child.exitCode===null&&record.child.signalCode===null}
+async function publishedRuntimeVersion(){
+ try{return (await requestControl(dir,'status'))?.version}
+ catch(error){
+  // A rollback publishes selection before its replacement runtime is ready.
+  // Keep the ownership rejection intact; this is only a bounded read-only probe
+  // of the fixture's still-owned supervisor, never a control mutation retry.
+  if(error.message==='RUNTIME_UNPROVEN_STAGE'&&supervisor&&alive(supervisor))return undefined;
+  throw error;
+ }
+}
 async function terminate(record){
  if(alive(record)&&record.child.pid){
   // Only dedicated groups/PIDs created and retained by this fixture. Never read
@@ -80,7 +90,7 @@ try{
  assert.equal(await deadline(supervisor.ready,20000,'INITIAL_PACKAGED_RUNTIME_NOT_RUNNING'),'9000.0.1');assert.equal((await requestControl(dir,'status'))?.version,'9000.0.1');
  checkpoint('queue compatible candidate');
  await queueUpdate(dir,'9000.0.2');
- await until(async()=>readUpdateState(dir)?.active==='9000.0.2'&&(await requestControl(dir,'status'))?.version==='9000.0.2','PACKAGED_UPDATE_DID_NOT_ACTIVATE',90000);
+ await until(async()=>readUpdateState(dir)?.active==='9000.0.2'&&await publishedRuntimeVersion()==='9000.0.2','PACKAGED_UPDATE_DID_NOT_ACTIVATE',90000);
  assert.equal(readUpdateState(dir).previous,'9000.0.1');await managedEntry(dir,'9000.0.1');
  checkpoint('verify frontend through symlinked parent');
  // Node ESM canonicalizes import.meta.url. /tmp→/private/tmp exposed an infinite
@@ -97,7 +107,7 @@ try{
  await queueUpdate(dir,'9000.0.3');
  await until(async()=>readUpdateState(dir)?.failed==='9000.0.3'
   &&readUpdateState(dir)?.active==='9000.0.2'
-  &&(await requestControl(dir,'status'))?.version==='9000.0.2',
+  &&await publishedRuntimeVersion()==='9000.0.2',
   'PACKAGED_UPDATE_DID_NOT_ROLL_BACK',90000);
  const recovered=readUpdateState(dir);
  assert.equal(recovered.bootstrap,'9000.0.1');assert.equal(recovered.previous,'9000.0.1');

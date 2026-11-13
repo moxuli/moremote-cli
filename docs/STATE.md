@@ -1,5 +1,21 @@
 # Current state — 2026-11-13
 
+## 0.1.3 release candidate — owner-authorized, not yet published
+
+- Integrated51942a0 and reviewed the final enrollment/setup and packaging delta.
+  Exact public0.1.2 archive bytes now live in the test fixtures with verified npm
+  SHA1/SHA512 and matching recorded GitHub SHA256, independent of workstation caches.
+- Final full check passes typecheck,221/221 tests and build. Three actual retained
+  public0.1.2 migration consumers pass. Real packaged activation/failed-start
+  rollback/retained frontend and clean shutdown pass; no everyday service is installed.
+- Release validation accepts additive capability metadata while retaining the
+  strict1/1/1 protocol tuple and exact source/package capability equality.
+  Constructor-scoped fixture isolation removes inherited operator credentials;
+  the smoke retries only read-only unproven-stage probes under its live owned supervisor.
+- Independent Stage A and Stage B reviews find no remaining scoped blocker.
+  Main integration, hosted checks, immutable npm/GitHub publication and independent
+  registry receipt remain pending. The production cloud remains unchanged.
+
 ## Scope
 
 Owner-approved notification/scoped delivery and local activity/widget integration; Apache-2.0. Standalone Node24 companion targeting inspected official SDK/protocol0.15.3. Existing iOS protocol-vector floor is independent and unchanged. OpenUI and broader system extensions remain outside this scope.

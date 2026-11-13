@@ -23,7 +23,7 @@ for(const outcome of ['available','unavailable','missing-capability'])test('publ
  const managed=join(f.state,'managed'),versions=join(managed,'versions');await privateManagedDirectory(managed);await privateManagedDirectory(versions);
  const oldPrefix=join(versions,'0.1.2');await mkdir(oldPrefix,{mode:0o700});
  const extracted=join(f.home,'published');await mkdir(extracted);
- await exec('/usr/bin/tar',['-xf',join(repo,'moxuli-moremote-0.1.2.tgz'),'-C',extracted]);
+ await exec('/usr/bin/tar',['-xf',join(repo,'tests','fixtures','moxuli-moremote-0.1.2.tar.gz'),'-C',extracted]);
  const oldRoot=join(oldPrefix,'node_modules','@moxuli','moremote');await mkdir(dirname(oldRoot),{recursive:true,mode:0o700});await cp(join(extracted,'package'),oldRoot,{recursive:true});
  assert.equal(JSON.parse(await readFile(join(oldRoot,'package.json'),'utf8')).version,'0.1.2');
  const state=initialUpdateState('0.1.2');state.lastCheck=Date.now();state.nextCheck=Date.now()+21600000;writeUpdateState(f.state,state);disableAutoUpdate(f.state);
