@@ -30,6 +30,11 @@
   Stage A narrow review passes; independent quality/security review and fresh
   hosted three-platform verification remain in progress before publication.
 
+- Hosted1df64e0 exercises all new behaviors successfully on Windows, but its
+  new cache fixture removes the directory before closing SQLite. Combine cleanup
+  into one ordered close-then-remove hook; preserve all behavior assertions and
+  rerun the full matrix on the corrected test source. Production bytes are unchanged.
+
 - Exact tagv0.1.3 and its successful three-platform CI43380589650 are retained.
   Release43381419784 fails its full check before packaging/publication: concurrent
   normal runtime config replacement triggers FOREIGN_RESOURCE_LIMIT in a read.

@@ -10,8 +10,8 @@ import {openEnvelope} from '../src/crypto.ts';
 import type {Attention} from '../src/official-client.ts';
 
 for(const kind of ['question','permission'] as const)test('cached '+kind+' cannot steal a replacement occurrence notification clock',async t=>{
- const dir=await mkdtemp(join(tmpdir(),'moremote-notice-cache-'));t.after(()=>rm(dir,{recursive:true,force:true}));
- const journal=new OperationJournal(join(dir,'journal.sqlite'));t.after(()=>journal.close());
+ const dir=await mkdtemp(join(tmpdir(),'moremote-notice-cache-'));
+ const journal=new OperationJournal(join(dir,'journal.sqlite'));t.after(async()=>{journal.close();await rm(dir,{recursive:true,force:true})});
  const pair={pairId:'11111111-1111-4111-8111-111111111111',rootKey:Buffer.alloc(32,7).toString('base64url'),hostToken:'synthetic',active:true};
  const official={generation:'synthetic-generation',requestContext:()=>({serverId:'synthetic-daemon',generation:'synthetic-generation'})};
  const request={id:'synthetic-request',kind:kind==='question'?'question':'tool',input:{value:'old'},actions:[{id:'allow',behavior:'allow'}]};
