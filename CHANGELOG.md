@@ -2,6 +2,10 @@
 
 ## 0.1.4 — 2026-11-13
 
+- Notify current questions/approvals using their stable occurrence clock, independently of an older task-completion timestamp. Fence delayed queries after request resolution/replacement so retired approvals cannot reappear with new authority or notifications.
+- Keep request observation under the official adapter's journal ownership, validate the returned source before binding, and retain exact occurrence identity through delayed notification queues.
+- Reject observed in-place content mutation even when followed by an otherwise valid atomic replacement. Exercise actual Windows open-handle replacement refusal and post-close replacement without relaxing resource checks.
+
 - Read complete owned private config snapshots across normal atomic replacement with bounded reopen attempts; retain no-follow, owner/mode/link/size/encoding checks and rejection of in-place changes.
 
 - Activate pending endpoints before requesting active-only control routes; verify official identity, original expiry and revocation first, then require fresh controls in the following cycle before any command or state publication.

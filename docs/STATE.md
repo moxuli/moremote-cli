@@ -2,6 +2,25 @@
 
 ## 0.1.4 release candidate — owner-authorized, not yet published
 
+- Pending questions/approvals now use a stable current-occurrence clock, not an
+  older task-completion clock. Actual SDK delayed-current/snapshot regressions
+  first reproduce resolution/replacement resurrection, then the observation fence
+  prevents journal, binding and notification renewal. Actual same-batch SDK reply
+  consumers also reproduce caller-continuation resurrection before repair: adapter
+  journal ownership removes duplicate synchronization, source fingerprints prevent
+  old request text acquiring a replacement binding, and crypto rechecks currentness.
+  Cached question/approval consumers fail before exact occurrence capture/drain
+  binding, then notifications10/10 pass without old clocks consuming new IDs.
+  Final unchanged-input full check passes251/251,typecheck and build. Independent
+  Stage A closes both lifecycle blockers; final quality re-review and hosted
+  three-platform verification remain pending before immutable publication.
+- Quality review catches observed in-place mutation followed by valid rename;
+  both real regressions fail before the pre-retry guard, then resource24/24 pass.
+  Hosted40e1b73 passes Linux/macOS but Windows rejects test-injected replacement
+  with a live handle. Tests now verify real refusal, complete original contents
+  and identity, then actual post-close replacement and strict unsafe-file refusal;
+  no production error guard or platform coverage is removed. Narrow review passes.
+
 - Ordinary config rename is now distinguished from an unsafe resource: at most
   three reopen attempts, independent descriptor/path validation, retired handles
   discarded, strict no-follow/user/private-mode/link/byte/encoding checks retained.

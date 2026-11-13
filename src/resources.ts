@@ -53,11 +53,14 @@ export function readPrivateText(path:string,limit:number,encoding:'utf8'|'utf16l
    while(size<bytes.length) {const count=readSync(fd,bytes,size,bytes.length-size,null);if(count===0)break;size+=count;}
    if(size>limit)throw Error('FOREIGN_RESOURCE_LIMIT');
    const finished=fstatSync(fd);assertResource(finished,'file',privateMode,true);
+   // Content changes already observed on this handle remain failures even if a
+   // later atomic replacement would otherwise permit reopening the pathname.
+   if(opened.size!==size||opened.size!==finished.size||opened.mtimeMs!==finished.mtimeMs)throw Error('FOREIGN_RESOURCE_CHANGED');
    const after=inspectResource(path,'file',false,privateMode);
    // Only an ordinary owned replacement permits another read. Linked, foreign
    // or insecure paths fail inspection, and in-place mutation is never retried.
    if(after&&!sameResource(opened,after))continue;
-   if(!after||finished.nlink!==1||opened.size!==size||opened.size!==after.size||opened.mtimeMs!==after.mtimeMs||opened.ctimeMs!==after.ctimeMs||opened.size!==finished.size||opened.mtimeMs!==finished.mtimeMs||opened.ctimeMs!==finished.ctimeMs)throw Error('FOREIGN_RESOURCE_CHANGED');
+   if(!after||finished.nlink!==1||opened.size!==after.size||opened.mtimeMs!==after.mtimeMs||opened.ctimeMs!==after.ctimeMs||opened.ctimeMs!==finished.ctimeMs)throw Error('FOREIGN_RESOURCE_CHANGED');
    if(encoding==='utf8'&&!isUtf8(bytes.subarray(0,size)))throw Error('FOREIGN_RESOURCE_ENCODING');
    return {text:bytes.toString(encoding,0,size),identity:{dev:opened.dev,ino:opened.ino}};
   } finally {closeSync(fd);}

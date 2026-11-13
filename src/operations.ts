@@ -1,7 +1,7 @@
 import type {AgentPermissionResponse} from '@getpaseo/protocol/agent-types';
 import {exact,object,text,LIMITS} from './limits.js';
 import {decode,openEnvelope,sealEnvelope,validateEnvelope,type Envelope} from './crypto.js';
-import {OperationJournal,type ReceiptState,type Occurrence} from './journal.js';
+import {OperationJournal,canonical,digest,type ReceiptState,type Occurrence} from './journal.js';
 import {occurrenceBinding} from './bindings.js';
 import {validatePermissionInput} from './permission.js';
 import type {Pair} from './config.js';
@@ -9,7 +9,7 @@ import {evidenceForCommand,type Evidence} from './evidence.js';
 export type Command={type:'send';agentId:string;text:string;messageId:string}|{type:'permission';agentId:string;requestId:string;requestBinding:string;response:AgentPermissionResponse};
 export interface PendingRequest{id:string;kind?:string;requestBinding?:string;occurrence?:Occurrence;actions?:{id:string;behavior:string}[];input?:unknown;suggestions?:unknown[]}
 export interface CurrentAgent{id:string;pendingPermissions?:PendingRequest[]}
-export interface OfficialOperations{current(id:string):Promise<CurrentAgent|null>;send(c:Extract<Command,{type:'send'}>):Promise<void>;permission(c:Extract<Command,{type:'permission'}>):Promise<void>;reconcile(c:Command,pair?:Pick<Pair,'pairId'|'rootKey'>):Promise<ReceiptState|null>;reconcileEvidence?(evidence:Evidence,pair:Pick<Pair,'pairId'|'rootKey'>):Promise<ReceiptState|null>;requestContext?():{serverId:string;generation:string}}
+export interface OfficialOperations{current(id:string):Promise<CurrentAgent|null>;send(c:Extract<Command,{type:'send'}>):Promise<void>;permission(c:Extract<Command,{type:'permission'}>):Promise<void>;reconcile(c:Command,pair?:Pick<Pair,'pairId'|'rootKey'>):Promise<ReceiptState|null>;reconcileEvidence?(evidence:Evidence,pair:Pick<Pair,'pairId'|'rootKey'>):Promise<ReceiptState|null>;requestContext?():{serverId:string;generation:string;journal?:OperationJournal}}
 export interface OperationCloud{dispatch(id:string):Promise<{dispatchAllowed:boolean}>;receipt(id:string,body:{state:ReceiptState;revision:number;envelope:Envelope}):Promise<unknown>}
 export interface OperationContext{pair:Pick<Pair,'pairId'|'rootKey'|'hostToken'|'active'|'relayRetiredAt'>;journal:OperationJournal;official:OfficialOperations;cloud:OperationCloud;clock?:()=>number}
 export function parseCommand(value:unknown,id:string):Command{
@@ -27,7 +27,22 @@ export function validateCommand(value:unknown,id:string,current:CurrentAgent|nul
  validatePermissionInput(request,c.response);
  }return c;
 }
-export async function boundCurrent(ctx:Pick<OperationContext,'pair'|'journal'|'official'>,agentId:string):Promise<CurrentAgent|null>{const current=await ctx.official.current(agentId);if(!current)return null;const source=ctx.official.requestContext?.();if(!source)return current;const requests=current.pendingPermissions||[];ctx.journal.syncRequests(source.serverId,agentId,source.generation,requests);return {...current,pendingPermissions:await Promise.all(requests.map(async r=>{const occurrence=ctx.journal.currentOccurrence(source.serverId,agentId,r.id);if(!occurrence)return {...r,requestBinding:undefined};return {...r,occurrence,requestBinding:await occurrenceBinding(ctx.pair,occurrence)}}))};}
+export async function boundCurrent(ctx:Pick<OperationContext,'pair'|'journal'|'official'>,agentId:string):Promise<CurrentAgent|null>{
+ const current=await ctx.official.current(agentId);if(!current)return null;
+ const source=ctx.official.requestContext?.();if(!source)return current;
+ if(source.journal&&source.journal!==ctx.journal)throw Error('REQUEST_JOURNAL_MISMATCH');
+ const requests=current.pendingPermissions||[];
+ // A journal-owning adapter synchronizes before resolving current(). Repeating
+ // that write here could restore an older response after a newer observation.
+ if(!source.journal)ctx.journal.syncRequests(source.serverId,agentId,source.generation,requests);
+ return {...current,pendingPermissions:await Promise.all(requests.map(async request=>{
+  const unbound={...request,occurrence:undefined,requestBinding:undefined};
+  const occurrence=ctx.journal.currentOccurrence(source.serverId,agentId,request.id);
+  if(!occurrence||occurrence.generation!==source.generation||occurrence.fingerprint!==digest(canonical(request)))return unbound;
+  const requestBinding=await occurrenceBinding(ctx.pair,occurrence);
+  return ctx.journal.isCurrent(occurrence)?{...request,occurrence,requestBinding}:unbound;
+ }))};
+}
 async function outcome(ctx:OperationContext,e:Pick<Envelope,'pairId'|'id'|'expiresAt'>,state:ReceiptState,now:number,code?:string){
  const old=ctx.journal.get(e.pairId,e.id)!;if(old.state==='accepted'&&state==='unknown')state='accepted';if(old.state==='resolved'||old.state==='rejected')state=old.state;
  if(old.receipt&&old.state===state){if(old.sentRevision<old.revision){await ctx.cloud.receipt(e.id,{state,revision:old.revision,envelope:old.receipt});ctx.journal.receiptSent(e.pairId,e.id,old.revision)}return}

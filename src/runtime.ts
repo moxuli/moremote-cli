@@ -26,7 +26,15 @@ export async function queueAttention(journal:OperationJournal,pair:Pair,event:At
  const topic=await presenceTopic(decode(pair.rootKey,32),pair.pairId,event.agentId);if(event.occurrence&&!journal.isCurrent(event.occurrence))return;
  journal.queueAttention(pair.pairId,id,envelope.expiresAt,{id,kind:event.kind,topic,envelope},payload);
 }
-async function boundAttention(journal:OperationJournal,pair:Pair,event:Attention,official:OfficialClient){if(!event.requestId)return event;const occurrence=journal.currentOccurrence(official.requestContext().serverId,event.agentId,event.requestId);if(!occurrence||occurrence.generation!==official.generation)return null;const requestBinding=await occurrenceBinding(pair,occurrence);if(!journal.isCurrent(occurrence))return null;return {...event,occurrence,sourceFingerprint:occurrence.fingerprint,requestBinding}}
+export async function boundAttention(journal:OperationJournal,pair:Pair,event:Attention,official:Pick<OfficialClient,'requestContext'|'generation'>){
+ if(!event.requestId)return event;
+ // Bind the occurrence captured when this event was observed. Looking up a
+ // replacement here could give its identity an older cached event's clock.
+ const occurrence=event.occurrence;
+ if(!occurrence||occurrence.serverId!==official.requestContext().serverId||occurrence.agentId!==event.agentId||occurrence.requestId!==event.requestId||occurrence.generation!==official.generation||occurrence.createdAt!==event.timestamp||!journal.isCurrent(occurrence))return null;
+ const requestBinding=await occurrenceBinding(pair,occurrence);if(!journal.isCurrent(occurrence))return null;
+ return {...event,occurrence,sourceFingerprint:occurrence.fingerprint,requestBinding};
+}
 async function publishResolutions(journal:OperationJournal,pair:Pair,cloud:CloudClient){for(const event of journal.attentionResolutions(pair.pairId)){try{await cloud.resolveAttention(event.id,event.resolvedAt)}catch(error){if(!(error instanceof CloudError&&error.status===404))throw error}journal.attentionResolutionSent(pair.pairId,event.id)}}
 // Relay disappearance/retirement fences execution, but is not an authenticated
 // endpoint revoke. Never manufacture a control receipt or reset its audit clock.

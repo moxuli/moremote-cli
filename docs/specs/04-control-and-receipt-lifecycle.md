@@ -69,6 +69,18 @@ read-only but cannot approve a replacement. Before dispatch, refresh the actual
 pending request, match its binding/source and validate the selected actual action.
 Do not depend on requestId never being reused.
 
+Request notifications use the exact current occurrence's first-observed clock,
+independent of a task's older completion or global attention timestamp. Keep that
+clock stable across repeated observations. A request/resolution event or a newer
+accepted observation fences older in-flight reads of that agent before journal
+synchronization or notification; delayed responses cannot recreate a retired
+occurrence, replace newer authority or supply a fresh notification clock.
+The official adapter owns synchronization into its exact journal; binding callers
+do not observe the returned request array again. They match its generation/source
+fingerprint and recheck currentness after binding. Queued internal request events
+capture their occurrence when observed, so delayed draining cannot attach an old
+event's clock to a replacement occurrence or consume its notification identity.
+
 Reject response fields outside the real upstream response shape. Any remembered
 permissions must be an actual offered suggestion explicitly selected by the user;
 never accept an arbitrary new grant or silently set remember. Edited input is
