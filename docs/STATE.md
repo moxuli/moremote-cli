@@ -1,6 +1,17 @@
 # Current state — 2026-11-13
 
-## 0.1.4 release candidate — owner-authorized, not yet published
+## Released0.1.4 — 2026-11-13
+
+- Owner-authorizedv0.1.4 targets tested sourcea5615b6. Final local251/251,
+  typecheck/build and independent source reviews pass. HostedCI43389151913 passes
+  complete checks/identity/real upgrade and rollback on Linux, macOS and Windows.
+- Release43390548675 succeeds through existing-secret npm/provenance and GitHub
+  publication. Independent public reads confirm version/latest0.1.4; downloaded
+  npm/GitHub bytes match SHA1/SHA512, GitHubSHA256SUMS and the exact local artifact.
+  SHA256: `c0e56b6ce596216fea6b2e546fc153c3833bafebc4c5ecf271d18b6a2d4e5151`.
+- No everyday service, ordinary official conversation or production cloud change.
+  Earlier unreleased/acceptance entries below are historical checkpoints; these
+  verified publication facts supersede their former release status.
 
 - Pending questions/approvals now use a stable current-occurrence clock, not an
   older task-completion clock. Actual SDK delayed-current/snapshot regressions
@@ -33,7 +44,7 @@
 - Hosted1df64e0 exercises all new behaviors successfully on Windows, but its
   new cache fixture removes the directory before closing SQLite. Combine cleanup
   into one ordered close-then-remove hook; preserve all behavior assertions and
-  rerun the full matrix on the corrected test source. Production bytes are unchanged.
+  rerun the full matrix on the corrected test source. Production code is unchanged.
 
 - Corrected8e4e065 Windows cleanup passes; macOS then rejects signaling an
   already stopped wrapper's old process group. Preserve independent lock/control/
