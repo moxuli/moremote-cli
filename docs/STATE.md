@@ -1,6 +1,24 @@
 # Project state
 
+## Remote activity delivery — 2026-11-15, unreleased
+
+The owner-authorized v2 path shares CLI attention/activity event ingress and the
+existing APNs infrastructure. Native foreground-started activities receive encrypted
+remote update/end without app keepalive. Widgets remain direct Paseo clients.
+No push-to-start, physical APNs delivery, deployment or release is claimed.
+Local proof: CLI249complete/7final-focused, cloud202, Kit554with5explicit
+skips, App83, real system journeys2and unsigned Release all pass. See
+[[2026-11-15-remote-activity-local-acceptance]].
+
 Updated: 2026-11-15
+
+## Informative notification previews — local and unreleased
+
+Optional endpoint-encrypted session/host/current-content previews are implemented
+on `fix/notification-content-1115`, with unchanged action/route authority, exact
+retries and original expiry. No new package, Worker or physical APNs acceptance
+is claimed. Final local checks and compatibility/review evidence:
+[[2026-11-15-informative-notifications-and-settings]].
 
 ## Current public release
 

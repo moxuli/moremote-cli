@@ -104,8 +104,9 @@ publication remains separately authorized.
 ## Notification-only cloud boundary — November 14
 
 The optional companion publishes only current question/approval forms and their
-exact occurrence bindings. It does not request provider usage or upload task
-titles, host/project labels or a conversation directory. Accepted source reads
+exact occurrence bindings. It does not request provider usage or upload a conversation directory. A current
+alert may carry its bounded title, host label and excerpt only inside the optional
+endpoint-encrypted preview described in02. Accepted source reads
 retain pending requests outside the bounded recent discovery page; stale reads
 and resolved/replaced occurrences cannot restore them. Publication changes are
 deduplicated; only pending hydration renews near expiry, and one empty publication

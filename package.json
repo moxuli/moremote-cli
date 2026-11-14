@@ -1,6 +1,6 @@
 {
   "name": "@moxuli/moremote",
-  "version": "0.1.6",
+  "version": "0.1.7",
   "description": "Optional encrypted notification and scoped-action companion for Paseo",
   "license": "Apache-2.0",
   "type": "module",
@@ -57,6 +57,6 @@
     "@types/ws": "8.18.1",
     "tsx": "4.20.6",
     "typescript": "5.9.3",
-    "ws": "8.20.0"
+    "ws": "8.21.0"
   }
 }

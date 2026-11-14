@@ -116,3 +116,11 @@ resource/key/permission/billing mutations requiring point-of-risk interactive
 confirmation. No deployment, Apple activation, physical delivery, public
 publication or everyday-host service installation is claimed by this update.
 
+
+## November15 informative-alert iteration
+
+The owner approved useful session/content notifications. The optional encrypted
+preview, native offline display and passive compatibility contract extend only
+ordinary notifications, preserving original commands, expiry and authority. Local
+implementation and acceptance: [[2026-11-15-informative-notifications-and-settings]]. No new
+publishing/deployment/Apple or real notification operation is included.

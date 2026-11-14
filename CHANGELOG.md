@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.1.7 — 2026-11-15
+
+- Pin ws8.21.0 to include upstream memory-exhaustion and uninitialized-close-memory fixes; retain Node24.13.0 and the exact official Paseo SDK versions.
+
+- Add optional endpoint-encrypted informative task alerts (session, computer and current content), passive rolling-version support and native-service-compatible mutable payloads; preserve original routes/actions, immutable retries and expiry/revocation.
+
+- Share semantic notification and optional encrypted remote Live Activity updates in one bounded event publication. Keep unchanged observations local, preserve independent immutable retries, and use a narrow phone-authorized directory interest. Widgets stay direct Paseo clients; no push-to-start is added.
+
 ## 0.1.6 — 2026-11-14
 
 - Use `https://api.moremote.moxuli.com` as the shared default for new setup, discovery and expert pairing only when no origin is configured. Preserve saved Pages/custom origins, per-phone authority and exact pending enrollment bytes; keep both domains directly available on the same notification backend. The custom domain is active with independently verified DNS, TLS and direct API routing; the old Pages origin remains available.

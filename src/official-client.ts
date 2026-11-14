@@ -15,8 +15,10 @@ import type { Command, OfficialOperations } from './operations.js';
 import { canonical,type ReceiptState,type OperationJournal,type Occurrence } from './journal.js';
 import { occurrenceBinding } from './bindings.js';
 import { LIMITS } from './limits.js';
+import {buildNotificationPreview,type NotificationPreview} from './notification-preview.js';
+import {LiveDirectory} from './live-directory.js';
 import {evidenceForCommand,contentDigest,type Evidence} from './evidence.js';
-export interface Attention{agentId:string;requestId?:string;requestBinding?:string;occurrence?:Occurrence;kind:'finished'|'question'|'permission'|'error';timestamp:number}
+export interface Attention{preview?:NotificationPreview;agentId:string;requestId?:string;requestBinding?:string;occurrence?:Occurrence;kind:'finished'|'question'|'permission'|'error';timestamp:number}
 type TerminalAttention={agentId:string;kind:'finished'|'error';timestamp:number;observedOrder:number};
 type TerminalRead={event:TerminalAttention;valid:boolean;next:TerminalAttention|null};
 type RequestRead={agentId?:string;observedOrder:number;stale:Set<string>};
@@ -28,16 +30,21 @@ export function projectTask(a:AgentSnapshotPayload){return {agentId:a.id,pending
 export class OfficialClient implements OfficialOperations{
  readonly sdk:DaemonClient;
  private subscription:ReturnType<DaemonClient['observeEvents']>|undefined;
+ private liveDirectory:LiveDirectory;
  readonly generation=randomUUID();
  private serverId='';
  private callbacks=new Set<(event:Attention)=>void>();
  private unlisten:(()=>void)|undefined;
+ private terminalPublished=new Map<string,string>();
  private terminalReads=new Map<string,TerminalRead>();
+ private previewLanes:Promise<void>[]=[Promise.resolve(),Promise.resolve()];
+ private previewLane=0;
  private requestReads=new Set<RequestRead>();
  private observationOrder=0;
+ private previewAgents=new Map<string,AgentSnapshotPayload>();
  private pendingTasks=new Map<string,ReturnType<typeof projectTask>>();
  constructor(readonly config:Config,private journal?:OperationJournal){const target=config.target||localListen(config.paseoHome);const password=parseHostTarget(target).password||process.env.PASEO_PASSWORD;
- this.sdk=createHostClient(target,{clientId:config.clientId,clientType:'cli',appVersion:'moremote-cli/0.1.0',...(password?{password}:{localCredential:()=>readLocalCredentialForTarget(config.paseoHome,target)}),reconnect:{enabled:false},connectTimeoutMs:15000,logger:{debug(){},info(){},warn(){},error(){}}});}
+ this.sdk=createHostClient(target,{clientId:config.clientId,clientType:'cli',appVersion:'moremote-cli/0.1.0',...(password?{password}:{localCredential:()=>readLocalCredentialForTarget(config.paseoHome,target)}),reconnect:{enabled:false},connectTimeoutMs:15000,logger:{debug(){},info(){},warn(){},error(){}}});this.liveDirectory=new LiveDirectory(this.sdk);}
  async connect(){await this.sdk.connect();const info=this.info();if(!info||info.features?.explicitEventSubscriptions!==true){await this.sdk.close();throw Error('EXPLICIT_SUBSCRIPTIONS_REQUIRED')}if(this.config.daemonServerId&&info.serverId!==this.config.daemonServerId){await this.sdk.close();throw Error('DAEMON_IDENTITY_CHANGED')}
  this.serverId=info.serverId;this.journal?.retireGeneration(info.serverId,this.generation);
  this.unlisten=this.sdk.subscribeRawMessages(message=>{
@@ -55,6 +62,8 @@ export class OfficialClient implements OfficialOperations{
  if(message.type==='agent_permission_resolved'){const p=message.payload;this.fenceRequestReads(p.agentId,++this.observationOrder);this.journal?.resolution(this.serverId,p.agentId,p.requestId,this.generation,p.resolution);const task=this.pendingTasks.get(p.agentId);if(task){task.pendingRequests=task.pendingRequests.filter(r=>r.requestId!==p.requestId);if(!task.pendingRequests.length)this.pendingTasks.delete(p.agentId)}}
  });
  this.subscription=this.sdk.observeEvents(['agent_attention_required','agent_permission_request','agent_permission_resolved','status.server_info'],{notifications:false});await this.subscription.ready;}
+ setLiveActivityEnabled(enabled:boolean){this.liveDirectory.setEnabled(enabled)}
+ liveActivitySnapshot(){const agents=this.liveDirectory.snapshot();return agents?{daemonServerId:this.serverId,hostName:this.info()?.hostname||hostname(),agents}:null}
  info():ServerInfoStatusPayload|null{return this.sdk.getLastServerInfoMessage()}
  private emit(event:Attention){if(Number.isSafeInteger(event.timestamp)&&event.timestamp>=0)for(const cb of this.callbacks)cb(event)}
  private emitRequest(agentId:string,request:AgentSnapshotPayload['pendingPermissions'][number]){
@@ -63,20 +72,44 @@ export class OfficialClient implements OfficialOperations{
   // Pending requests have independent lifetimes. The global attention clock can
   // still describe an older finished turn; never use it to expire a new request.
   // Runtime journals retain one observation clock per exact current occurrence.
-  this.emit({agentId,requestId:request.id,occurrence,kind:request.kind==='question'?'question':'permission',timestamp:occurrence?.createdAt??Date.now()});
+  const agent=this.previewAgents.get(agentId);
+  this.emit({agentId,requestId:request.id,occurrence,kind:request.kind==='question'?'question':'permission',timestamp:occurrence?.createdAt??Date.now(),...(agent?{preview:buildNotificationPreview(agent,this.info()?.hostname||hostname(),request.kind==='question'?'question':'permission',request)}:{})});
  }
- private readTerminal(event:TerminalAttention){
+ private async withPreviewSlot<T>(body:()=>Promise<T>):Promise<T>{
+ const lane=this.previewLane++%this.previewLanes.length;
+ const pending=this.previewLanes[lane].then(body);
+ this.previewLanes[lane]=pending.then(()=>{},()=>{});return pending;
+ }
+ private readTerminal(event:TerminalAttention,initialAgent?:AgentSnapshotPayload){
  const read:TerminalRead={event,valid:true,next:null};this.terminalReads.set(event.agentId,read);
- const complete=(agent:AgentSnapshotPayload|null)=>{
+ const complete=async(agent:AgentSnapshotPayload|null)=>{
+ if(this.terminalReads.get(event.agentId)!==read)return;
+ let entries:Awaited<ReturnType<DaemonClient['fetchAgentTimeline']>>['entries']=[];
+ const canonical=agent?this.terminalTimestamp(agent,event):null;
+ const published=canonical!==null&&this.terminalPublished.get(event.agentId)===event.kind+':'+canonical;
+ if(!published&&read.valid&&!read.next&&agent&&canonical!==null&&event.kind==='finished'){
+  try{
+   const timeline=await this.withPreviewSlot(async()=>{
+    if(!read.valid||read.next||this.terminalReads.get(event.agentId)!==read||event.timestamp+LIMITS.snapshotMs<=Date.now())return null;
+    return this.sdk.fetchAgentTimeline(event.agentId,{direction:'tail',projection:'canonical',limit:30,timeout:5000});
+   });
+   if(!timeline||timeline.agentId!==event.agentId||this.terminalTimestamp(timeline.agent,event)!==canonical)read.valid=false;
+   else if(!timeline.staleCursor&&!timeline.gap)entries=timeline.entries;
+  }catch{ /* Title/host remain useful when an optional read fails; never delay beyond five seconds. */ }
+ }
  if(this.terminalReads.get(event.agentId)!==read)return;
  this.terminalReads.delete(event.agentId);
  if(read.next){this.readTerminal(read.next);return}
- if(!read.valid)return;
- const timestamp=this.terminalTimestamp(agent,event);if(timestamp!==null)this.emit({agentId:event.agentId,kind:event.kind,timestamp});
+ if(!read.valid||published)return;
+ const timestamp=this.terminalTimestamp(agent,event);if(timestamp!==null&&agent){
+  if(this.terminalPublished.size>=LIMITS.attention&&!this.terminalPublished.has(event.agentId))this.terminalPublished.delete(this.terminalPublished.keys().next().value!);
+  this.terminalPublished.set(event.agentId,event.kind+':'+timestamp);
+  this.emit({agentId:event.agentId,kind:event.kind,timestamp,preview:buildNotificationPreview(agent,this.info()?.hostname||hostname(),event.kind,undefined,entries)});
+ }
  };
- // At most one read and one latest event per agent; no retry without a new event.
- // Terminal hydration is read-only; stale replies must not resync requests.
- void this.sdk.fetchAgent({agentId:event.agentId,timeout:15000}).then(value=>complete(value?.agent||null)).catch(()=>complete(null));
+ // One bounded optional canonical tail, never an additional live subscription or write.
+ if(initialAgent)void complete(initialAgent);
+ else void this.sdk.fetchAgent({agentId:event.agentId,timeout:15000}).then(value=>complete(value?.agent||null)).catch(()=>complete(null));
  }
  private terminalTimestamp(agent:AgentSnapshotPayload|null,event:TerminalAttention){
  if(!agent||agent.id!==event.agentId||!agent.requiresAttention||agent.attentionReason!==event.kind||agent.activeTurn)return null;
@@ -118,6 +151,7 @@ export class OfficialClient implements OfficialOperations{
  }
  async current(agentId:string){return this.readCurrent(agentId)}
  private rememberRequests(agentId:string,agent:AgentSnapshotPayload|null){
+  if(agent?.pendingPermissions.length)this.previewAgents.set(agentId,agent);else this.previewAgents.delete(agentId);
   if(agent?.pendingPermissions.length)this.pendingTasks.set(agentId,projectTask(agent));else this.pendingTasks.delete(agentId);
  }
  // Only accepted source reads enter this cache. A limited discovery page cannot
@@ -134,8 +168,13 @@ export class OfficialClient implements OfficialOperations{
  for(const a of agents){this.fenceTerminalRead(a.id,a,read.observedOrder);this.journal?.syncRequests(this.serverId,a.id,this.generation,a.pendingPermissions);this.rememberRequests(a.id,a);this.journal?.syncAttention(a.id,a.requiresAttention===true,a.attentionTimestamp?Date.parse(a.attentionTimestamp):null)}
  for(const a of agents){
   for(const request of a.pendingPermissions)this.emitRequest(a.id,request);
-  if(a.requiresAttention&&a.attentionReason&&a.attentionReason!=='permission'&&a.attentionTimestamp)this.emit({agentId:a.id,kind:a.attentionReason,timestamp:Date.parse(a.attentionTimestamp)});
+  if(a.attentionReason&&a.attentionReason!=='permission'&&a.attentionTimestamp&&!this.terminalReads.has(a.id)){
+   const event:TerminalAttention={agentId:a.id,kind:a.attentionReason,timestamp:Date.parse(a.attentionTimestamp),observedOrder:read.observedOrder};
+   // Recovery uses the same fenced preview read as live events, without blocking
+   // directory/control polling or reading expired history. At most two tails run.
+   if(this.terminalTimestamp(a,event)!==null&&event.timestamp+LIMITS.snapshotMs>Date.now()&&this.terminalPublished.get(a.id)!==event.kind+':'+event.timestamp)this.readTerminal(event,a);
+  }
  }
  return {...this.notificationSnapshot(),hostName:(info.hostname||hostname()).slice(0,256),measuredAt:Date.now()};}finally{this.requestReads.delete(read)}}
- async close(){this.pendingTasks.clear();this.terminalReads.clear();this.requestReads.clear();this.unlisten?.();await this.subscription?.release().catch(()=>{});await this.sdk.close()}
+ async close(){this.liveDirectory.stop();this.callbacks.clear();this.terminalPublished.clear();this.previewAgents.clear();this.pendingTasks.clear();this.terminalReads.clear();this.requestReads.clear();this.unlisten?.();await this.subscription?.release().catch(()=>{});await this.sdk.close()}
 }

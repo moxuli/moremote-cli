@@ -75,13 +75,13 @@ for(const ownedSubscriptions of [false,true])test(`real SDK wire (${ownedSubscri
       const value=currentAgent,send=()=>reply({type:'fetch_agent_response',payload:{requestId:m.requestId,agent:value,project:null,error:null}});
       const hold=holdAgentRead;holdAgentRead=undefined;if(hold)hold(send);else send();
      }
-     else if(m.type==='fetch_agents_request')reply({type:'fetch_agents_response',payload:{requestId:m.requestId,entries:[{agent:currentAgent,project:{projectKey:'synthetic-project',projectName:'Synthetic project',checkout:{cwd:agent.cwd,isGit:true,currentBranch:null,remoteUrl:null,isPaseoOwnedWorktree:false}}}],pageInfo:{nextCursor:null,prevCursor:null,hasMore:false}}});
+     else if(m.type==='fetch_agents_request')reply({type:'fetch_agents_response',payload:{requestId:m.requestId,...(m.subscribe&&ownedSubscriptions?{subscriptionId:'synthetic-live-agents'}:{}),entries:[{agent:currentAgent,project:{projectKey:'synthetic-project',projectName:'Synthetic project',checkout:{cwd:agent.cwd,isGit:true,currentBranch:null,remoteUrl:null,isPaseoOwnedWorktree:false}}}],pageInfo:{nextCursor:null,prevCursor:null,hasMore:false}}});
      else if(m.type==='send_agent_message_request'){
       mutations++;lastSend=m;
       if(acknowledge)reply({type:'send_agent_message_response',payload:{requestId:m.requestId,agentId:m.agentId,accepted:true,error:null}});
       else socket.terminate();
      }
-     else if(m.type==='fetch_agent_timeline_request')reply({type:'fetch_agent_timeline_response',payload:{requestId:m.requestId,agentId:agent.id,agent,direction:'tail',projection:'canonical',epoch:'synthetic-epoch',reset:false,staleCursor:false,gap:false,window:{minSeq:timelineEntries.length?1:0,maxSeq:timelineEntries.length,nextSeq:timelineEntries.length+1},startCursor:null,endCursor:null,hasOlder:false,hasNewer:false,entries:timelineEntries,error:null}});
+     else if(m.type==='fetch_agent_timeline_request')reply({type:'fetch_agent_timeline_response',payload:{requestId:m.requestId,agentId:agent.id,agent:currentAgent,direction:'tail',projection:'canonical',epoch:'synthetic-epoch',reset:false,staleCursor:false,gap:false,window:{minSeq:timelineEntries.length?1:0,maxSeq:timelineEntries.length,nextSeq:timelineEntries.length+1},startCursor:null,endCursor:null,hasOlder:false,hasNewer:false,entries:timelineEntries,error:null}});
      else if(m.type==='subscription.release.request')reply({type:'subscription.release.response',payload:{requestId:m.requestId,subscriptionId:m.subscriptionId}});
     }
    }catch(error){fixtureFailure.reject(error);socket.terminate();}
@@ -105,6 +105,15 @@ for(const ownedSubscriptions of [false,true])test(`real SDK wire (${ownedSubscri
   assert.equal(new Set(subscription.events).size,subscription.events.length);assert.equal(subscription.notifications,false);
   // Legacy negotiation filters the status interest, but hello still hydrates identity.
   assert.equal(official.info()?.serverId,'synthetic-daemon');assert.equal(official.info()?.hostname,'Synthetic host');assert.equal(official.requestContext().serverId,'synthetic-daemon');
+  assert.equal(official.liveActivitySnapshot(),null);
+  assert.equal(wire.filter(row=>row.message?.type==='fetch_agents_request').length,0,'notification-only clients acquire no live directory');
+  official.setLiveActivityEnabled(true);
+  await official.sdk.fetchAgent({agentId:'synthetic-barrier',timeout:2000});
+  assert.equal(official.liveActivitySnapshot()?.agents[0].id,agent.id);
+  for(const socket of server.clients)socket.send(JSON.stringify(wrapSessionMessage(SessionOutboundMessageSchema.parse({type:'agent_update',payload:{kind:'upsert',agent:{...agent,status:'running',activeTurn:{turnId:'live-turn',startedAt:null}},...(ownedSubscriptions?{subscriptionId:'synthetic-live-agents'}:{})}}))));
+  await official.sdk.fetchAgent({agentId:'synthetic-barrier',timeout:2000});
+  assert.equal(official.liveActivitySnapshot()?.agents[0].activeTurn?.turnId,'live-turn');
+  official.setLiveActivityEnabled(false);assert.equal(official.liveActivitySnapshot(),null);
   const observed:Attention[]=[],publications:Promise<void>[]=[];
   const noticeNow=Date.now(),base=noticeNow-10000;
   const stopAttention=official.onAttention(event=>{observed.push(event);publications.push(queueAttention(journal,pair,event,noticeNow));});
@@ -119,6 +128,8 @@ for(const ownedSubscriptions of [false,true])test(`real SDK wire (${ownedSubscri
   for(const [index,kind] of (['finished','error'] as const).entries()){
    const timestamp=base+index*1000;
    currentAgent=terminal(kind,timestamp);
+   const previewBody=kind==='finished'?'Current answer: login fixed, three checks passed.':'';
+   timelineEntries=kind==='finished'?[AgentTimelineEntryPayloadSchema.parse({provider:'claude',item:{type:'assistant_message',text:previewBody},timestamp:new Date(timestamp-100).toISOString(),seqStart:1,seqEnd:1,sourceSeqRanges:[{startSeq:1,endSeq:1}],collapsed:[]})]:[];
    const attention=Promise.withResolvers<Attention>();
    const off=official.onAttention(event=>{off();attention.resolve(event);});
    const readsBefore=agentReads,delayed=Promise.withResolvers<()=>void>();
@@ -133,12 +144,13 @@ for(const ownedSubscriptions of [false,true])test(`real SDK wire (${ownedSubscri
     assert.equal(agentReads,readsBefore+1,'newer delivery clocks must not create concurrent reads for one agent');
    }
    release();
-   assert.deepEqual(await bounded(attention.promise,2000,'ATTENTION_NOT_OBSERVED'),{agentId:agent.id,kind,timestamp});
+   assert.deepEqual(await bounded(attention.promise,2000,'ATTENTION_NOT_OBSERVED'),{agentId:agent.id,kind,timestamp,preview:{title:agent.title,hostName:'Synthetic host',body:previewBody}});
    assert.equal(agentReads,readsBefore+(kind==='finished'?2:1),'a burst may retain only one latest follow-up, not one read per raw event');
    await Promise.all(publications);
    const first=journal.attention(pair.pairId,noticeNow);
    assert.equal(first.length,1);
    assert.deepEqual(await openEnvelope(Buffer.alloc(32,7),first[0].body.envelope,noticeNow),{agentId:agent.id,kind,timestamp});
+   assert.equal((await openEnvelope(Buffer.alloc(32,7),first[0].body.preview,noticeNow) as {body:string}).body,previewBody);
    await official.snapshot();await Promise.all(publications);
    assert.deepEqual(journal.attention(pair.pairId,noticeNow),first,'raw delivery and directory snapshot must retain one canonical ciphertext');
    assert.equal(journal.attentionResolutions(pair.pairId).length,index,'the snapshot must not create and resolve another logical notice');
@@ -146,6 +158,7 @@ for(const ownedSubscriptions of [false,true])test(`real SDK wire (${ownedSubscri
    await official.snapshot();
    assert.equal(journal.attention(pair.pairId,noticeNow).length,0);
   }
+  timelineEntries=[];
   for(const transition of ['clear','new-turn','new-attention'] as const){
    const timestamp=base+3000,delayed=Promise.withResolvers<()=>void>();
    currentAgent=terminal('finished',timestamp);
@@ -185,7 +198,7 @@ for(const ownedSubscriptions of [false,true])test(`real SDK wire (${ownedSubscri
    assert.equal(agentReads,readsBefore+1,'a new turn waits behind the existing read instead of starting another');
    const count=observed.length;
    release();
-   assert.deepEqual(await bounded(attention.promise,2000,'LATEST_ATTENTION_NOT_OBSERVED'),{agentId:agent.id,kind:'error',timestamp:timestamp+1000});
+   assert.deepEqual(await bounded(attention.promise,2000,'LATEST_ATTENTION_NOT_OBSERVED'),{agentId:agent.id,kind:'error',timestamp:timestamp+1000,preview:{title:agent.title,hostName:'Synthetic host',body:''}});
    await Promise.all(publications);
    assert.equal(agentReads,readsBefore+2);
    assert.equal(observed.length,count+1,'the retired response must not emit before the latest queued event');
@@ -210,8 +223,24 @@ for(const ownedSubscriptions of [false,true])test(`real SDK wire (${ownedSubscri
    const attention=Promise.withResolvers<Attention>();
    const off=official.onAttention(event=>{off();attention.resolve(event);});
    releaseTerminal();
-   assert.deepEqual(await bounded(attention.promise,2000,'OLDER_OBSERVATION_SUPPRESSED_TERMINAL'),{agentId:agent.id,kind:'finished',timestamp},`${observation} captured before terminal delivery must not fence the newer event or its queued successor`);
+   assert.deepEqual(await bounded(attention.promise,2000,'OLDER_OBSERVATION_SUPPRESSED_TERMINAL'),{agentId:agent.id,kind:'finished',timestamp,preview:{title:agent.title,hostName:'Synthetic host',body:''}},`${observation} captured before terminal delivery must not fence the newer event or its queued successor`);
    await Promise.all(publications);
+   currentAgent={...currentAgent,requiresAttention:false,attentionReason:null,attentionTimestamp:null};
+   await official.snapshot();
+  }
+  {
+   const timestamp=base+7000,body='Restored connection: the actual final answer is available.';
+   currentAgent=terminal('finished',timestamp);
+   timelineEntries=[AgentTimelineEntryPayloadSchema.parse({provider:'claude',item:{type:'assistant_message',text:body},timestamp:new Date(timestamp-100).toISOString(),seqStart:1,seqEnd:1,sourceSeqRanges:[{startSeq:1,endSeq:1}],collapsed:[]})];
+   const restored=Promise.withResolvers<Attention>();
+   const off=official.onAttention(event=>{off();restored.resolve(event);});
+   await official.snapshot();
+   const recovered=await bounded(restored.promise,2000,'RECOVERY_PREVIEW_NOT_OBSERVED');
+   assert.equal(recovered.preview?.body,body,'reconnection must hydrate the final answer before immutable publication');
+   await Promise.all(publications);
+   const notices=journal.attention(pair.pairId,noticeNow);
+   assert.equal(notices.length,1);
+   assert.equal((await openEnvelope(Buffer.alloc(32,7),notices[0].body.preview,noticeNow) as {body:string}).body,body);
    currentAgent={...currentAgent,requiresAttention:false,attentionReason:null,attentionTimestamp:null};
    await official.snapshot();
   }
@@ -242,5 +271,5 @@ for(const ownedSubscriptions of [false,true])test(`real SDK wire (${ownedSubscri
   const forbidden=['client_heartbeat','clear_agent_attention','workspace.clear_attention.request','register_push_token'];
   assert.ok(!wire.some(m=>forbidden.includes(m.message?.type)));
  };
- try{await Promise.race([scenario(),fixtureFailure.promise]);}finally{await cleanup();}
+ try{await Promise.race([scenario(),fixtureFailure.promise]);}catch(error){t.diagnostic(String(error));throw error;}finally{await cleanup();}
 });

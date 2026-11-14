@@ -3,7 +3,7 @@
 Optional, independent Apache-2.0 computer companion for MoRemote and an **unmodified Paseo 0.15.3** daemon. Existing official-only clients keep working without this project or its cloud.
 
 Canonical repository/command: `moremote-cli`; public npm package:
-**`@moxuli/moremote`** (published **0.1.2**); source entry: `bin/moremote-cli.js`.
+**`@moxuli/moremote`** (release **0.1.7**); source entry: `bin/moremote-cli.js`.
 There is no unscoped npm alias or automatic adoption of foreign/old state.
 
 ## Install the published package
@@ -99,18 +99,19 @@ output. It installs no service. Existing custom origins and per-phone authority
 remain unchanged. Published 0.1.2 requires explicit origin/cloud configuration
 before using that legacy manual path.
 
-## Notification-only cloud boundary — unreleased source
+## Cloud boundary
 
-Cloudflare supports native notifications and their explicit replies/approvals.
-Widgets, Live Activities and ordinary app/extension sends use official Paseo
-transport and shared device state; the companion no longer discovers activities,
-registers system-surface tokens or uploads usage/directory snapshots. Current
-notification forms retain exact occurrence bindings and immutable retry identity.
-See [configuration](docs/configuration.md#notification-only-cloud-use).
+Cloudflare supports notifications, explicit replies/approvals and optional
+phone-authorized remote updates to an already-started Live Activity. Notification
+and activity changes share one bounded event POST; unchanged observations add no
+Worker request. Widgets and ordinary app/extension reads and sends use official
+Paseo transport and shared device state. No general directory or usage feed is
+uploaded. See the [configuration](docs/configuration.md) and rollout evidence in
+[STATE](docs/STATE.md).
 
 ## What leaves the computer
 
-The cloud sees pairing/operation/event identities, times, sizes, bounded transport states, scoped capability hashes and encrypted command/control/receipt/state/attention bodies. Attention routing includes a separately derived opaque conversation tag; default push text is generic. Endpoint-encrypted notification state includes only verified daemon identity and current occurrence-bound question/approval forms. Original supported question/approval forms are included only within strict bounds, to answer that exact request. No complete chat/history, code files, model keys or official Paseo passwords/local credentials are uploaded. The relay cannot decrypt or manufacture accepted commands. This is not forward secrecy.
+The cloud sees pairing/operation/event identities, times, sizes, bounded transport states, scoped capability hashes and encrypted command/control/receipt/state/attention bodies. Attention routing includes a separately derived opaque conversation tag; provider fallback text is generic; supported native apps can decrypt the separately encrypted bounded alert preview. Endpoint-encrypted notification state includes only verified daemon identity and current occurrence-bound question/approval forms. Original supported question/approval forms are included only within strict bounds, to answer that exact request. No complete chat/history, code files, model keys or official Paseo passwords/local credentials are uploaded. The relay cannot decrypt or manufacture accepted commands. This is not forward secrecy.
 
 Only exact message sends and responses to an **actual current** question/approval are supported. Admission accepted is not task completion. Unknown official outcomes are reconciled, **never blindly resent**, even when the same message ID is available.
 Endpoint cancellation/revocation uses authenticated encrypted controls and durable local tombstones, not trust in a cloud DELETE result. An offline/withheld control is waiting/unknown, not endpoint-confirmed. A dispatched operation is too late to undo. Exact request-instance bindings retire on source/resolution/connection changes. Minimal revisioned encrypted receipts remain auditable for24h after original expiry, separately from short-lived user payloads; positive admission never regresses to unknown.
@@ -138,8 +139,27 @@ Default CLI state uses `LOCALAPPDATA/MoRemoteCLI` on Windows, `~/Library/Applica
 Public release prerequisites, existing-secret setup and exact verification commands:
 [releasing](docs/releasing.md). Checked-in workflows are not proof of a published package.
 
-Widgets, Live Activities and ordinary app/extension sends connect through Paseo
-and local device state. They do not use this Cloudflare notification service.
-Current request forms remain encrypted here only for notification replies and
-approvals; no task directory or usage feed is uploaded. Source changes are
-unreleased; existing production is unchanged until a separately authorized rollout.
+Widgets and ordinary app/extension sends connect through Paseo and local device
+state. Optional remote Live Activity delivery shares the notification service;
+current request forms remain encrypted and exact-instance-bound. Full rollout
+requires corresponding App and service versions; see STATE for actual availability.
+
+
+### Informative encrypted alerts
+
+Task notifications can carry a bounded endpoint-encrypted session title, computer
+name and current answer/question/approval/error excerpt. A native app notification
+extension decrypts on device, preserving navigation and actions. The service
+never receives plaintext, endpoint keys or full transcripts. This adds no cloud
+requests, widget feed or Live Activity dependency. Older versions retain safe
+fallback behavior; see the delivery/API contracts and current STATE for rollout.
+
+### Shared remote Live Activity updates
+
+An optional phone-authorized v2 interest enables a separate owned Paseo directory
+subscription. Semantic changes share one event request with pending notifications;
+unchanged state adds no Worker request. The phone's already-started activity can
+update/end through native APNs while the app is suspended. Each source computer
+needs the corresponding CLI version. Local foreground behavior and direct Paseo
+widgets remain available; push-to-start is not implemented. See
+[[2026-11-15-remote-activity-and-shared-events]].

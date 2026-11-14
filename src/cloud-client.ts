@@ -1,6 +1,8 @@
 import { validateOrigin } from './config.js';
 import { LIMITS, object } from './limits.js';
-import type { Envelope } from './crypto.js';
+import { validateEnvelope, type Envelope } from './crypto.js';
+import type {LiveContribution,LiveInterest} from './live-activity.js';
+import {UUID} from './limits.js';
 import type { ReceiptState } from './journal.js';
 export class CloudError extends Error{readonly code:string;constructor(code:string,readonly status:number,readonly retryAt?:number,readonly pauseScope:'origin'|'normal'='origin'){const safe=/^[A-Z0-9_]{1,64}$/.test(code)?code:'CLOUD_HTTP_ERROR';super(safe);this.code=safe}}
 export interface CloudRetryState{error?:CloudError;normalError?:CloudError}
@@ -24,6 +26,9 @@ function recoveryRequest(method:string,path:string){
 }
 export class CloudClient{
  readonly origin:string;
+ notificationPreviews=false;
+ liveActivityV2=false;
+ liveActivityInterest?:LiveInterest;
  constructor(origin:string,readonly pairId:string,private token:string,allowLoopback=false,private fetcher:typeof fetch=fetch,private signal?:AbortSignal,private retryState:CloudRetryState={},private cycleFence?:CloudRetryState){this.origin=validateOrigin(origin,allowLoopback)}
  async request(method:string,path:string,body?:unknown,signal?:AbortSignal):Promise<Record<string,unknown>>{
  // A runtime cycle that observed a pause must reacquire controls in a new
@@ -35,8 +40,9 @@ export class CloudClient{
   if(this.cycleFence?.normalError)throw this.cycleFence.normalError;
   const normal=this.retryState.normalError;if(normal?.retryAt!==undefined&&normal.retryAt>Date.now()){if(this.cycleFence)this.cycleFence.normalError=normal;throw normal}this.retryState.normalError=undefined;
  }
- const json=body===undefined?undefined:JSON.stringify(body);if(json&&Buffer.byteLength(json)>LIMITS.envelopeBytes)throw Error('REQUEST_LIMIT');
+ const json=body===undefined?undefined:JSON.stringify(body);if(json&&Buffer.byteLength(json)>(method==='POST'&&path===this.path('/events')?LIMITS.liveEventBytes:LIMITS.envelopeBytes))throw Error('REQUEST_LIMIT');
  const response=await this.fetcher(this.origin+'/v1'+path,{method,headers:{authorization:'Bearer '+this.token,...(json?{'content-type':'application/json'}:{})},body:json,signal:AbortSignal.any([AbortSignal.timeout(20000),...(this.signal?[this.signal]:[]),...(signal?[signal]:[])]),redirect:'error'});
+ if(response.ok){this.notificationPreviews=response.headers.get('x-moremote-notification-preview')==='1';this.liveActivityV2=response.headers.get('x-moremote-live-activity')==='2'}
  const retryAt=retryDeadline(response.headers.get('Retry-After'),response.status,Date.now());
  const reader=response.body?.getReader();let size=0;const chunks:Uint8Array[]=[];
  if(reader){try{while(true){const r=await reader.read();if(r.done)break;size+=r.value.byteLength;if(size>LIMITS.responseBytes)throw Error('RESPONSE_LIMIT');chunks.push(r.value)}}catch(error){
@@ -68,7 +74,18 @@ export class CloudClient{
  receipt(id:string,body:{state:ReceiptState;revision:number;envelope:Envelope}){return this.request('POST',this.path('/commands/'+id+'/receipt'),body)}
  state(envelope:Envelope){return this.request('PUT',this.path('/state'),{envelope})}
  attention(body:unknown){return this.request('POST',this.path('/attention'),body)}
- async controls():Promise<Envelope[]>{const result=await this.request('GET',this.path('/controls'));if(!Array.isArray(result.controls)||result.controls.length>100)throw Error('INVALID_CONTROL_PAGE');return result.controls.map(row=>object(row).envelope as Envelope).filter(Boolean)}
+ async controls():Promise<Envelope[]>{const result=await this.request('GET',this.path('/controls'));if(!Array.isArray(result.controls)||result.controls.length>100)throw Error('INVALID_CONTROL_PAGE');
+ this.liveActivityInterest=undefined;
+ if(this.liveActivityV2&&result.liveActivity){const value=object(result.liveActivity);if(typeof value.registrationId!=='string'||!UUID.test(value.registrationId))throw Error('INVALID_LIVE_ACTIVITY_REGISTRATION');const interest=validateEnvelope(value.interest,Date.now());if(interest.pairId!==this.pairId||interest.channel!=='activityInterest')throw Error('INVALID_LIVE_ACTIVITY_INTEREST');this.liveActivityInterest={registrationId:value.registrationId,interest}}
+ return result.controls.map(row=>object(row).envelope as Envelope).filter(Boolean)}
+ async events(attention:unknown[],activity?:LiveContribution){
+ const value=await this.request('POST',this.path('/events'),{attention,...(activity?{activity}:{})});
+ if(!Array.isArray(value.attention)||value.attention.length!==attention.length)throw Error('INVALID_EVENT_RESPONSE');
+ const accepted=new Set<string>();for(const item of value.attention){const row=object(item);if(typeof row.id!=='string'||typeof row.accepted!=='boolean')throw Error('INVALID_EVENT_RESPONSE');if(row.accepted)accepted.add(row.id)}
+ const live=value.activity===undefined?undefined:object(value.activity);
+ if(activity&&typeof live?.accepted!=='boolean')throw Error('INVALID_ACTIVITY_RESPONSE');
+ return {attention:accepted,activity:live?.accepted===true,activityCode:typeof live?.code==='string'?live.code:undefined};
+ }
  controlReceipt(id:string,body:{envelope:Envelope}){return this.request('POST',this.path('/controls/'+id+'/receipt'),body)}
  resolveAttention(id:string,resolvedAt:number){return this.request('POST',this.path('/attention/'+id+'/resolve'),{resolvedAt})}
 }

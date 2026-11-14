@@ -118,3 +118,15 @@ macOS: user Library/LaunchAgents/com.moremote.cli.plist. Linux: XDG_CONFIG_HOME/
 ## Update source
 
 Only exact `@moxuli/moremote` versions from https://registry.npmjs.org are installed with lifecycle scripts disabled. Immutable private prefixes retain the bootstrap and last-known-good packages. Managed installed-package run and explicit per-user service installation use a retained supervisor, six-hour persisted checks, independent opt-out and whole-cycle IPC drain before candidate activation. Source checkout run stays manual; foreign/read-only resources fail honestly. `status` reports actual runtime version plus active/pending/previous/error/deadline facts. `auto-update --disable` prevents all queued activation until re-enabled. Compatible storage/wire protocol is checked before any drain; incompatible candidates remain manual. No official daemon/global package/Node upgrade. See [full lifecycle](specs/06-managed-updates.md) and [release prerequisites](releasing.md).
+
+
+## Notification presentation bounds — unreleased
+
+`src/notification-preview.ts` bounds UTF-8 title/host/body to256/128/960 bytes,
+removes invisible controls and generated UI source, and preserves whole graphemes.
+The full APNs payload remains at most4,096 bytes, including both envelopes and
+localized fallback. There is no new user setting, origin rewrite, dependency or
+cloud call. Current-turn canonical history reads are optional, at most30 entries,
+five seconds each and two concurrent tails; expired/stale completion cannot gain
+new authority. Feature support is observed on existing authenticated responses,
+never by changing a failed immutable publication.

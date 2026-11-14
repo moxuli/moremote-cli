@@ -184,6 +184,31 @@ it does not execute or renew an expired command, question or approval. The norma
 command decoder and recipient pre-dispatch expiry checks remain strict.
 
 
+
+### Encrypted notification presentation — unreleased November 15
+
+An attention POST may additionally carry `preview`, a separately sealed attention
+channel envelope with the exact same pair, ID, issuedAt and expiresAt as `envelope`.
+Its plaintext is exactly `{type:"notificationPreview",version:1,agentId,kind,
+timestamp,title,hostName,body}`. Identity/kind/time must match the authenticated
+route. It uses a fresh random nonce under the existing independently derived
+attention key; legacy route plaintext and action authority are unchanged.
+Title/host/excerpt limits are256/128/960 UTF-8 bytes. Only current-turn assistant
+prose or the exact current question/approval/error is included, never reasoning,
+tool output or a full transcript. A finished event may read one canonical30-entry
+tail with a five-second timeout; recovery uses at most two concurrent tails,
+checks the same terminal identity and does not block control/directory polling.
+
+Cloud never decrypts previews. The complete APNs JSON in either locale must fit
+4,096 bytes; endpoints reduce or omit only the optional preview before immutable
+publication. Retry never changes already journaled bytes. Expiry/revoke removes
+both ciphertexts at the original route deadline; audit digests do not renew them.
+A native notification service extension authenticates/decrypts locally, with only
+the derived attention display key in protected shared Keychain storage. It retains
+the original category/actions/userInfo. No network lookup or extra cloud request
+is required. Missing keys, unavailable extension or invalid preview retain a safe
+localized fallback; an authenticated legacy route may use cached local labels.
+
 ## Required evidence
 
 Cross-runtime vectors cover exact encryption/decryption and authenticated metadata;

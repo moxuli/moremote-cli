@@ -16,15 +16,19 @@ import {LIMITS,object} from './limits.js';
 import {NotificationStatePublisher} from './notification-state.js';
 import {LocalEnrollment} from './local-enrollment.js';
 import {inspectResource} from './resources.js';
+import {LiveActivityPublisher} from './live-activity.js';
+import {publishEvents} from './event-publication.js';
+import {encryptNotificationPreview} from './notification-preview.js';
 function stableId(value:unknown){const h=createHash('sha256').update(JSON.stringify(value)).digest('hex').slice(0,32);return h.slice(0,8)+'-'+h.slice(8,12)+'-'+h.slice(12,16)+'-'+h.slice(16,20)+'-'+h.slice(20)}
-export async function queueAttention(journal:OperationJournal,pair:Pair,event:Attention&{sourceFingerprint?:string;occurrence?:Occurrence},now=Date.now()){
+export async function queueAttention(journal:OperationJournal,pair:Pair,event:Attention&{sourceFingerprint?:string;occurrence?:Occurrence},now=Date.now(),includePreview=true){
  if(event.timestamp+LIMITS.snapshotMs<=now||event.timestamp>now+LIMITS.futureMs)return;
  const payload:Attention={agentId:event.agentId,kind:event.kind,timestamp:event.timestamp,...(event.requestId?{requestId:event.requestId}:{}),...(event.requestBinding?{requestBinding:event.requestBinding}:{})};
  // A bound request notice belongs to its exact occurrence, not its snapshot clock.
  // Keep the legacy source identity for callers without authoritative occurrences.
  const id=event.requestId&&event.occurrence?stableId([pair.pairId,event.agentId,event.kind,event.requestId,'occurrence',event.occurrence.occurrenceId]):stableId([pair.pairId,event.agentId,event.kind,event.requestId||'',event.sourceFingerprint||'',event.requestId&&!event.sourceFingerprint?null:event.timestamp]);const issuedAt=event.timestamp;const envelope=await sealEnvelope(decode(pair.rootKey,32),{version:1,pairId:pair.pairId,id,channel:'attention',issuedAt,expiresAt:issuedAt+LIMITS.snapshotMs},payload);
+ const preview=includePreview&&event.preview?await encryptNotificationPreview(pair,envelope,{agentId:event.agentId,kind:event.kind,timestamp:event.timestamp},event.preview):undefined;
  const topic=await presenceTopic(decode(pair.rootKey,32),pair.pairId,event.agentId);if(event.occurrence&&!journal.isCurrent(event.occurrence))return;
- journal.queueAttention(pair.pairId,id,envelope.expiresAt,{id,kind:event.kind,topic,envelope},payload);
+ journal.queueAttention(pair.pairId,id,envelope.expiresAt,{id,kind:event.kind,topic,envelope,...(preview?{preview}:{})},payload);
 }
 export async function boundAttention(journal:OperationJournal,pair:Pair,event:Attention,official:Pick<OfficialClient,'requestContext'|'generation'>){
  if(!event.requestId)return event;
@@ -59,7 +63,7 @@ export async function runRuntime(dir:string,version?:string){
  const journal=new OperationJournal(join(dir,'journal.sqlite'));closeJournal=()=>journal.close();
  if(process.send){process.on('message',parentMessage);process.on('disconnect',parentGone);if(!process.connected)parentGone();else process.send({kind:'moremote-ready'},undefined,undefined,()=>{})}
  const attentionQueue:Attention[]=[];let backoff:number=LIMITS.pollMs;let measuredAt=0;let snapshot:Awaited<ReturnType<OfficialClient['snapshot']>>|undefined;
- const statePublisher=new NotificationStatePublisher();
+ const statePublisher=new NotificationStatePublisher();const livePublisher=new LiveActivityPublisher(journal);
  const retryStates=new Map<string,CloudRetryState>();const pollOrigins=new Set<string>();
  process.once('SIGINT',stop);process.once('SIGTERM',stop);
  while(!stopped&&!draining){try{
@@ -88,6 +92,7 @@ export async function runRuntime(dir:string,version?:string){
  }
  if(stopped)break;
  if(!official||!official.sdk.isConnected){detach?.();await official?.close().catch(()=>{});stage='connecting';official=new OfficialClient(config,journal);await official.connect();const serverId=official.info()!.serverId;if(!config.daemonServerId){config.daemonServerId=serverId;await saveConfig(dir,config)}detach=official.onAttention(event=>{if(attentionQueue.length<500)attentionQueue.push(event);else lastError='ATTENTION_QUEUE_LIMIT'});measuredAt=0;}
+ official.setLiveActivityEnabled(config.cloudEnabled&&config.pairs.some(pair=>pair.active&&!journal.pairRevoked(pair.pairId)&&!!clouds.get(pair.pairId)?.liveActivityInterest));
  try{await enrollment.cycle(config,official.info()!.serverId,pair=>{
   const origin=pair.apiOrigin||config.apiOrigin!;pollOrigins.add(origin);
   let retry=retryStates.get(origin);if(!retry){retry={};retryStates.set(origin,retry)}
@@ -97,7 +102,7 @@ export async function runRuntime(dir:string,version?:string){
  if(snapshot===undefined||Date.now()-measuredAt>=30000){snapshot=await official.snapshot();measuredAt=snapshot.measuredAt}
  stage=config.cloudEnabled?'cloud-enabled':'local-only';activePairs=config.pairs.filter(p=>p.active&&p.relayRetiredAt===undefined&&!journal.pairRevoked(p.pairId)).length;const events=attentionQueue.splice(0);
  // Persist every active phone's events before the first network send.
- if(config.cloudEnabled)for(const pair of config.pairs.filter(p=>p.active&&p.relayRetiredAt===undefined&&!journal.pairRevoked(p.pairId)))for(const event of events){const bound=await boundAttention(journal,pair,event,official);if(bound)await queueAttention(journal,pair,bound)}
+ if(config.cloudEnabled)for(const pair of config.pairs.filter(p=>p.active&&p.relayRetiredAt===undefined&&!journal.pairRevoked(p.pairId)))for(const event of events){const bound=await boundAttention(journal,pair,event,official);if(bound)await queueAttention(journal,pair,bound,Date.now(),clouds.get(pair.pairId)?.notificationPreviews===true)}
  for(const pair of config.pairs){if(stopped)break;const cloud=clouds.get(pair.pairId);if(!cloud||cycleFences.get(cloud.origin)?.error)continue;try{
  if(pair.daemonServerId&&pair.daemonServerId!==official.info()!.serverId){if(journal.pairRevoked(pair.pairId)||pair.relayRetiredAt!==undefined)continue;throw Error('PAIR_DAEMON_MISMATCH')}
  // A new activation gets no commands/state in this cycle. The next cycle must
@@ -113,7 +118,7 @@ export async function runRuntime(dir:string,version?:string){
  detailsCurrent=await statePublisher.publish(pair,cloud,payload);
  }catch(error){failure=error;if(await observeRelayRetirement(config,dir,pair,cloud,error))continue}
  try{await publishResolutions(journal,pair,cloud)}catch(error){failure=error}
- for(const item of journal.attention(pair.pairId,Date.now())){if(!detailsCurrent&&['question','permission'].includes(item.body.kind))continue;try{await cloud.attention(item.body);journal.attentionSent(pair.pairId,item.id)}catch(error){failure=error}}
+ try{await publishEvents(pair,cloud,journal,livePublisher,official.liveActivitySnapshot(),detailsCurrent)}catch(error){failure=error}
  // Publication failures are independent from acquisition. Preserve the normal
  // three-second command/control cadence while still surfacing degraded status.
  try{for(const envelope of await cloud.commands()){if(stopped||cycleFences.get(cloud.origin)?.error)break;try{await executeOperation({pair,journal,official,cloud,clock:Date.now},envelope)}catch(error){failure=error}}}

@@ -1,0 +1,30 @@
+{
+  "seed": "CQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQk=",
+  "displayKey": "1QT5c2Hk0zwEHMQZgTEPt7Q4gp3f/9WogCuwKO3Uza8=",
+  "pairID": "11111111-1111-4111-8111-111111111111",
+  "subscriptionId": "22222222-2222-4222-8222-222222222222",
+  "generation": "33333333-3333-4333-8333-333333333333",
+  "hostLifetime": "55555555-5555-4555-8555-555555555555",
+  "createdAt": 1800000000000,
+  "deadline": 1800028800000,
+  "measuredAt": 1800000001000,
+  "payload": {
+    "version": 2,
+    "subscriptionId": "22222222-2222-4222-8222-222222222222",
+    "generation": "33333333-3333-4333-8333-333333333333",
+    "pairId": "11111111-1111-4111-8111-111111111111",
+    "topic": "ZTaB48TokA_u56qDAnDiSJEWBkMTsKwn2JSDoFymVFE",
+    "envelope": {
+      "version": 1,
+      "pairId": "11111111-1111-4111-8111-111111111111",
+      "id": "7f46cb05-e593-4826-b9f2-9272df7824b9",
+      "channel": "activityState",
+      "issuedAt": 1800000001000,
+      "expiresAt": 1800000601000,
+      "nonce": "W3vHmDd5qoqXmEcu",
+      "ciphertext": "EnWYfp_S1WYPPsJ0Z6beTGEJ1AMl-uvpK2kxvHms9170jWHl_Z-9qI2MbTLi5yK3QxSHFFn5YrbJWvIsXlN9rmyx6caqcWJllw9xZ31aGmuxgLl3E1oPtnhc-uuWNHOJk75M21m0g7bhY5I-Y6LqPWcfoz3StX6tC_FDt9ZSGrA6r1D4S8hjfzc4WEUuAfbTcFAnTJGZcB3To2J5WDyp6L7J9BSIR4IrHXvDDUj35dWmcoEF7-CbSxBlD6mUfl0UofXl1NaVjIDvF9K05a2mwzC_mAGklGEjWPrtpYi1BI1x1gobN9gKFuRK95UlK-hJFwGW35ztd4yznxQhDIDTsGehcT_WjdQdj_Yo3FbpWsaWYhQ5lu9ySWFdpk1mdgrWDMRGmD45Z7Ko0QLHSLBptYZaYAfVxW1B3fvLOc1xVhI4rm18_AuSvEmBhI6LmLxA_jP20T8E3btcMrqbxSdfzlKoPdXyId0sm_xIk5m9X98XosqIyjlkLCexKsKQStlT-Ibbeu1jT_E84ZZiuuyH7KQIXm30U6ihRECOnWy42EyWia_gLo3sTd_CBF5d_wadK95kledaKQsGUHiNieKew8d5LFAhiQNj7qPdLdYFFzolovQ3sjPDlcsO74WjFUBBdHwVf2fsxOhwsVwGU2snam-HWI7FUqmfvgyUio6kZlTDhFa0DMh5SUUgks3yZ5heoKsvsHxcez8BLw_LEj9_l7qqjlEtLSxWneiJ6eRX4bKyIJYk3bZhN7LJYQpVoy6ZQTAWR4Qyr97gsuEVmrGgIvQ"
+    },
+    "ongoingCount": 2,
+    "waitingCount": 1
+  }
+}

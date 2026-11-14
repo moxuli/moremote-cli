@@ -4,7 +4,7 @@
 
 ## Common rules
 
-Base path is `/v1`. JSON is UTF-8 with bounded body parsing (128 KiB). Responses
+Base path is `/v1`. JSON is UTF-8 with bounded body parsing (128 KiB; shared v2 events512KiB). Responses
 use `{ok:true,...}` or `{ok:false,error:{code,message}}`; errors contain concise
 codes, never raw private payloads. TLS is required except explicit loopback dev.
 UUID identifiers are lowercase canonical strings. Timestamps are integer epoch
@@ -145,14 +145,14 @@ No official heartbeat/read acknowledgement is sent by the companion.
 
 ### POST /pairs/{pairId}/attention; GET /pairs/{pairId}/attention/{eventId}
 
-Host writes, phone reads exact event. Body `{id,kind,topic,envelope}`; kind is
+Host writes, phone reads exact event. Body `{id,kind,topic,envelope,preview?}`; kind is
 `finished|question|permission|error`, envelope channel `attention` and ID `id`.
 Encrypted content contains `{agentId,requestId?,requestBinding?,kind,timestamp}`;
 question/permission attention includes the exact companion-issued requestBinding.
 Event identity is stable across reconnect/retry. Exact retry does not send another
 push; conflicting bytes are rejected. Only currently valid events get attempts.
 Suppress this app's push if a genuine unexpired matching presence lease exists.
-No inference from the official shouldNotify flag. APNs copy is generic/localized.
+No inference from the official shouldNotify flag. APNs fallback copy is generic/localized.
 
 Persist notification attempt state before I/O. A lost APNs response is uncertain,
 not proof of failure; retries reuse the same apns-id/collapse identity with bounded
@@ -304,8 +304,8 @@ Delivery states are `queued|inflight|retry|uncertain|accepted|rejected|unavailab
 suppressed|expired|revoked|resolved`; they never assert display or acknowledgement.
 Missing configuration is `unavailable`, not provider acceptance.
 
-APNs custom data is exactly `pairId,eventId,kind,route`, beside generic localized
-`aps`. `route` is the original attention envelope, never a plaintext conversation
+APNs custom data is `pairId,eventId,kind,route` plus optional encrypted `preview`,
+beside localized fallback `aps` with `mutable-content:1`. `route` is the original attention envelope, never a plaintext conversation
 identifier. Attention ingestion rejects any event whose complete alert payload
 would exceed4,096 UTF-8 bytes in either supported locale (`413`,
 `apns_payload_too_large`), even before a device registers. No route is silently
@@ -399,7 +399,7 @@ most32 entries;32 near-maximum envelopes can approach4MiB. Exact command reads
 may contain both original128KiB-bounded payload and a separate8KiB receipt; a
 host pairing response may contain two bounded proofs. A128KiB response reader
 would permanently reject valid work and is nonconforming. This larger response
-budget never raises the128KiB request or64KiB decrypted command-content limits.
+budget never raises the128KiB ordinary-request or64KiB decrypted command-content limits.
 
 ### Retired system-surface routes
 
@@ -410,3 +410,44 @@ these features remain. Durable Object initialization purges legacy surface rows;
 notification device, attention, operation and control records remain intact.
 Widgets and local ActivityKit read/update through the official Paseo path and
 shared device state, independently of this notification service.
+
+
+## Optional preview interoperability — unreleased November 15
+
+Successful authenticated pair responses advertise
+`x-moremote-notification-preview:1`; existing successful response bodies remain
+unchanged. A new companion observes this passively on existing control reads
+before adding `preview` to a newly journaled attention event. An older relay gets
+the immutable legacy shape, without an extra capability request. Existing
+journaled events are never resealed or stripped after attempted publication.
+A new relay accepts both exact legacy and exact optional-preview shapes. Preview
+metadata must match the route interval, pairing, attention channel and event ID;
+unknown fields remain invalid. The same event's digest covers both ciphertexts.
+Both are actively erased on original expiry/revoke. Existing attention GET
+response names, attempt/registration fences, uncertain outcomes, categories and
+reply/current-request validation are unchanged. New apps can label legacy alerts
+from authenticated local cache; old apps retain the safe localized alert fallback.
+
+## Remote activity v2 (unreleased)
+
+Only the authenticated phone may PUT `/pairs/:id/live-activity` with
+subscriptionId, generation, monotonic client revision, activity token/environment,
+startedAt, deadline, encrypted interest and a32byte aggregate membership capability.
+DELETE takes `{revision}` and cannot retire a newer registration. Interest is
+bounded to8KiB and8hours; the separate local rendering seed never enters cloud.
+The existing host controls response passively includes registrationId/interest
+and `x-moremote-live-activity:2`; no capability probe is added.
+
+Host POST `/pairs/:id/events` takes `{attention:[...],activity?:contribution}`.
+This route and its private publish hop alone allow512KiB; other requests remain
+128KiB. Attention has at most8 original immutable events, independent per-ID ACKs;
+activity has a separate accepted result, registrationId and increasing sequence.
+Each source may publish100 candidates (aggregate512 across16pairs), with encrypted
+payloads at most2700bytes each. Opaque topic/cycle/event identities plus minimal
+phase/ordering metadata support fair arbitration; titles/routes remain encrypted.
+Provider content-state is `{payload:string}` containing the bounded v2 wrapper.
+APNs uses liveactivity type, `<bundle>.push-type.liveactivity` topic, priority5
+for routine updates/10for attention or end, ordered epoch-second timestamps,
+stale-date and immediate end dismissal. Apple4KiB limits are checked after final
+serialization. Registration, exact retries, revocation and end never authorize
+commands. Legacy activity/widget routes remain410. No push-to-start is implemented.
