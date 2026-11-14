@@ -195,11 +195,11 @@ for(const ownedSubscriptions of [false,true])test(`real SDK wire (${ownedSubscri
    currentAgent={...currentAgent,requiresAttention:false,attentionReason:null,attentionTimestamp:null};
    await official.snapshot();
   }
-  for(const observation of ['current','activity'] as const){
-   const timestamp=base+6000+(observation==='activity'?100:0);
+  {
+   const observation='current',timestamp=base+6000;
    currentAgent={...agent,status:'running',updatedAt:new Date(timestamp-100).toISOString(),lastUserMessageAt:new Date(timestamp-1000).toISOString(),activeTurn:{turnId:'synthetic-delayed-observation',startedAt:new Date(timestamp-1000).toISOString()}};
    const older=Promise.withResolvers<()=>void>();holdAgentRead=older.resolve;
-   const observationResult=observation==='current'?official.current(agent.id):official.activityTask(agent.id);
+   const observationResult=official.current(agent.id);
    const releaseOlder=await bounded(older.promise,2000,'OLDER_OBSERVATION_NOT_CAPTURED');
    currentAgent=terminal('finished',timestamp);
    const terminalRead=Promise.withResolvers<()=>void>();holdAgentRead=terminalRead.resolve;

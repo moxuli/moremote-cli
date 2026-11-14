@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+- Limit Cloudflare to notifications and their explicit reply/approval/control lifecycle. Remove activity/widget registration, discovery, dedicated provider delivery and general directory/usage publication; retain immutable uncertain-action receipts.
+- Preserve notification reply/approval execution, exact request-instance validation and3s control/outcome acquisition across all surface removals.
+- Deduplicate semantic notification hydration, preserve all accepted current requests across bounded local discovery and renew only pending forms; unchanged idle samples perform no state upload.
+
 ## 0.1.4 — 2026-11-13
 
 - Notify current questions/approvals using their stable occurrence clock, independently of an older task-completion timestamp. Fence delayed queries after request resolution/replacement so retired approvals cannot reappear with new authority or notifications.

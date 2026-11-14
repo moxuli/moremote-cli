@@ -47,7 +47,8 @@ test('explicit normal-budget rejection pauses normal work but preserves recovery
  const fetcher:typeof fetch=async(input)=>{const path=new URL(String(input)).pathname;calls.push(path);if(path.endsWith('/state'))return Response.json({ok:false,error:{code:'daily_work_limit'}},{status:429,headers:{'retry-after':'60','x-moremote-budget':'normal','x-moremote-reset':String(reset)}});return Response.json({ok:true,controls:[]})};
  const retryState={},cycleFence={};const client=new CloudClient('http://localhost:18787',pairId,'synthetic',true,fetcher,undefined,retryState,cycleFence);
  await assert.rejects(client.request('PUT','/pairs/'+pairId+'/state',{}));
- await client.controls();await client.request('PUT','/pairs/'+pairId+'/activities/22222222-2222-4222-8222-222222222222/end',{});
+ await client.controls();await client.resolveAttention('22222222-2222-4222-8222-222222222222',Date.now());
+ await assert.rejects(client.request('PUT','/pairs/'+pairId+'/activities/22222222-2222-4222-8222-222222222222/end',{}));
  await assert.rejects(client.commands());assert.equal(calls.length,3);
 });
 for(const invalid of [

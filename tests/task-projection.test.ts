@@ -12,7 +12,7 @@ import {projectSnapshot} from '../src/projection.ts';
 import {CloudClient} from '../src/cloud-client.ts';
 import {openEnvelope,sealEnvelope,type Envelope} from '../src/crypto.ts';
 
-test('official provider and creation/user recency survive bounded encrypted state publication; assistant updates cannot replace them', {timeout:15000},async t=>{
+test('real SDK uploads only current notification requests, including observed requests outside the discovery page', {timeout:15000},async t=>{
  const dir=await mkdtemp(join(tmpdir(),'moremote-task-projection-'));
  const server=new WebSocketServer({host:'127.0.0.1',port:0});
  let official:OfficialClient|undefined,journal:OperationJournal|undefined,failure:unknown;
@@ -25,18 +25,20 @@ test('official provider and creation/user recency survive bounded encrypted stat
  const base={provider:'claude',cwd:'/synthetic/project',model:null,createdAt,updatedAt:'2026-01-03T00:00:00.000Z',lastUserMessageAt,status:'idle',
   capabilities:{supportsStreaming:true,supportsSessionPersistence:true,supportsDynamicModes:false,supportsMcpServers:false,supportsReasoningStream:false,supportsToolInvocations:true},
   currentModeId:null,availableModes:[],pendingPermissions:[],persistence:null,title:'Synthetic task'};
- let agents=[AgentSnapshotPayloadSchema.parse({...base,id:'synthetic-existing',provider:'codex'}),AgentSnapshotPayloadSchema.parse({...base,id:'synthetic-no-user',createdAt:'2026-01-02T12:00:00.000Z',lastUserMessageAt:null})];
+ const question={id:'question',provider:'codex',name:'AskUserQuestion',kind:'question',actions:[{id:'answer',label:'Answer',behavior:'allow'}],input:{questions:[{header:'Choice',question:'Choose',options:[{label:'First'},{label:'Second'}],multiSelect:false}]}};
+ let agents=[AgentSnapshotPayloadSchema.parse({...base,id:'synthetic-existing',provider:'codex',pendingPermissions:[question]}),AgentSnapshotPayloadSchema.parse({...base,id:'synthetic-no-user',createdAt:'2026-01-02T12:00:00.000Z',lastUserMessageAt:null})];
  server.on('connection',socket=>{
   const reply=(message:unknown)=>socket.send(JSON.stringify(wrapSessionMessage(SessionOutboundMessageSchema.parse(message))));
   socket.on('message',data=>{
    try{
     const frame=JSON.parse(data.toString());
-    if(frame.type==='hello')reply({type:'status',payload:{status:'server_info',serverId:'synthetic-projection-daemon',hostname:'Synthetic host',features:{explicitEventSubscriptions:true,ownedSubscriptions:true}}});
+    if(frame.type==='hello')reply({type:'status',payload:{status:'server_info',serverId:'synthetic-projection-daemon',hostname:'Synthetic host',features:{explicitEventSubscriptions:true,ownedSubscriptions:true,providerUsageList:true}}});
     else if(frame.type==='ping')socket.send(JSON.stringify({type:'pong'}));
     else if(frame.type==='session'){
      const message=frame.message;
      if(message.type==='session.events.set_subscription.request')reply({type:'session.events.set_subscription.response',payload:{requestId:message.requestId,subscriptionId:'synthetic-projection-subscription'}});
      else if(message.type==='subscription.release.request')reply({type:'subscription.release.response',payload:{requestId:message.requestId,subscriptionId:message.subscriptionId}});
+     else if(message.type==='fetch_agent_request')reply({type:'fetch_agent_response',payload:{requestId:message.requestId,agent:AgentSnapshotPayloadSchema.parse({...agents[0],id:'off-page'}),project:null,error:null}});
      else if(message.type==='fetch_agents_request')reply({type:'fetch_agents_response',payload:{requestId:message.requestId,entries:agents.map(agent=>({agent,project:{projectKey:'synthetic-project',projectName:'Synthetic project',checkout:{cwd:agent.cwd,isGit:true,currentBranch:null,remoteUrl:null,isPaseoOwnedWorktree:false}}})),pageInfo:{nextCursor:null,prevCursor:null,hasMore:false}}});
      else throw Error('UNEXPECTED_OFFICIAL_REQUEST');
     }
@@ -56,16 +58,25 @@ test('official provider and creation/user recency survive bounded encrypted stat
   assert.equal(JSON.stringify(body).includes('synthetic-existing'),false,'task metadata must stay inside endpoint-authenticated ciphertext');
   return Response.json({ok:true,envelope:body.envelope});
  });
+ await official.current('off-page');
  const observed:unknown[]=[];
  for(let revision=0;revision<2;revision++){
   const snapshot=await official.snapshot(),payload=await projectSnapshot(snapshot,pair,journal,official.generation);
   const envelope=await sealEnvelope(root,{version:1,pairId:pair.pairId,id:revision?'33333333-3333-4333-8333-333333333333':'22222222-2222-4222-8222-222222222222',channel:'state',issuedAt:snapshot.measuredAt,expiresAt:snapshot.measuredAt+600000},payload);
   await cloud.state(envelope);
-  const decoded=await openEnvelope(root,publications.at(-1)!) as {tasks:{agentId:string;provider:string;createdAt:string;lastUserMessageAt:string|null;updatedAt:string}[]};
-  observed.push(decoded.tasks.map(({agentId,provider,createdAt,lastUserMessageAt})=>({agentId,provider,createdAt,lastUserMessageAt})));
-  assert.equal(decoded.tasks[0].updatedAt,agents[0].updatedAt);
+  const decoded=await openEnvelope(root,publications.at(-1)!) as {tasks:{agentId:string;pendingRequests:{requestId:string;requestBinding:string;request:unknown}[]}[]};
+  assert.deepEqual(Object.keys(decoded).sort(),['daemonServerId','tasks','version']);
+  assert.equal(JSON.stringify(decoded).includes('/synthetic/project'),false);
+  assert.equal(JSON.stringify(decoded).includes('Synthetic task'),false);
+  observed.push(decoded.tasks.map(task=>({agentId:task.agentId,requestId:task.pendingRequests[0].requestId})));
+  for(const task of decoded.tasks){assert.deepEqual(Object.keys(task).sort(),['agentId','pendingRequests']);assert.match(task.pendingRequests[0].requestBinding,/^[A-Za-z0-9_-]{43}$/)}
   agents=agents.map(agent=>({...agent,updatedAt:'2026-01-04T00:00:00.000Z'}));
  }
- const expected=[{agentId:'synthetic-existing',provider:'codex',createdAt,lastUserMessageAt},{agentId:'synthetic-no-user',provider:'claude',createdAt:'2026-01-02T12:00:00.000Z',lastUserMessageAt:null}];
+ const expected=[{agentId:'off-page',requestId:'question'},{agentId:'synthetic-existing',requestId:'question'}];
  assert.deepEqual(observed,[expected,expected]);assert.equal(failure,undefined);
+ const resolved={type:'agent_permission_resolved',payload:{agentId:'off-page',requestId:'question',resolution:{behavior:'allow'}}};
+ for(const socket of server.clients)socket.send(JSON.stringify(wrapSessionMessage(SessionOutboundMessageSchema.parse(resolved))));
+ const deadline=Date.now()+2000;
+ while(official.notificationSnapshot().tasks.some(t=>t.agentId==='off-page')&&Date.now()<deadline)await new Promise(resolve=>setTimeout(resolve,10));
+ assert.equal(official.notificationSnapshot().tasks.some(t=>t.agentId==='off-page'),false,'an accepted resolution retires only its exact cached request');
 });

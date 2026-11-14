@@ -1,10 +1,10 @@
-import {randomUUID,createHash} from 'node:crypto';
+import {createHash} from 'node:crypto';
 import {join} from 'node:path';
 import {setTimeout as sleep} from 'node:timers/promises';
 import {loadConfig,saveConfig,privateDirectory,pruneRetiredPairs,type Pair,type Config} from './config.js';
 import {OfficialClient,type Attention} from './official-client.js';
 import {CloudClient,CloudError,type CloudRetryState} from './cloud-client.js';
-import {sealEnvelope,decode,presenceTopic,type Envelope} from './crypto.js';
+import {sealEnvelope,decode,presenceTopic} from './crypto.js';
 import {OperationJournal,type Occurrence} from './journal.js';
 import {executeOperation,reconcileJournal} from './operations.js';
 import {activatePending} from './pairing.js';
@@ -13,7 +13,7 @@ import {occurrenceBinding} from './bindings.js';
 import {projectSnapshot} from './projection.js';
 import {ownRuntime} from './control.js';
 import {LIMITS,object} from './limits.js';
-import {ActivityPublisher,ActivityWorkLane,widgetFingerprint} from './activity.js';
+import {NotificationStatePublisher} from './notification-state.js';
 import {LocalEnrollment} from './local-enrollment.js';
 import {inspectResource} from './resources.js';
 function stableId(value:unknown){const h=createHash('sha256').update(JSON.stringify(value)).digest('hex').slice(0,32);return h.slice(0,8)+'-'+h.slice(8,12)+'-'+h.slice(12,16)+'-'+h.slice(16,20)+'-'+h.slice(20)}
@@ -53,24 +53,22 @@ export async function runRuntime(dir:string,version?:string){
  const parentGone=()=>{draining=true;drainWake.abort()};
  let detach:(()=>void)|undefined,closeJournal:(()=>void)|undefined;
  const release=await ownRuntime(dir,()=>({stage,lastError,activePairs,version:version??null}),stop);
- const activityLane=new ActivityWorkLane();let activityFailure:unknown=null,activityPairCursor=0;
  const enrollment=new LocalEnrollment(dir);
  try{
  if(!inspectResource(join(dir,'config.json'),'file',true))await saveConfig(dir,await loadConfig(dir));
  const journal=new OperationJournal(join(dir,'journal.sqlite'));closeJournal=()=>journal.close();
  if(process.send){process.on('message',parentMessage);process.on('disconnect',parentGone);if(!process.connected)parentGone();else process.send({kind:'moremote-ready'},undefined,undefined,()=>{})}
  const attentionQueue:Attention[]=[];let backoff:number=LIMITS.pollMs;let measuredAt=0;let snapshot:Awaited<ReturnType<OfficialClient['snapshot']>>|undefined;
- const statePublications=new Map<string,{envelope:Envelope;widgetFingerprint:string;acknowledged:boolean}>();const activityPublisher=new ActivityPublisher();
+ const statePublisher=new NotificationStatePublisher();
  const retryStates=new Map<string,CloudRetryState>();const pollOrigins=new Set<string>();
  process.once('SIGINT',stop);process.once('SIGTERM',stop);
  while(!stopped&&!draining){try{
- const now=Date.now();journal.cleanup(now);const config=await loadConfig(dir);pollOrigins.clear();let failure:unknown=activityFailure;activityFailure=null;let acquisitionFailed=false;const clouds=new Map<string,CloudClient>();const cycleFences=new Map<string,CloudRetryState>();
+ const now=Date.now();journal.cleanup(now);const config=await loadConfig(dir);pollOrigins.clear();let failure:unknown;let acquisitionFailed=false;const clouds=new Map<string,CloudClient>();const cycleFences=new Map<string,CloudRetryState>();
  for(const pair of config.pairs){const revokedAt=journal.revocationTime(pair.pairId);if(revokedAt!==undefined&&pair.revokedAt===undefined){pair.active=false;pair.revokedAt=revokedAt;await saveConfig(dir,config)}if(pair.relayRetiredAt!==undefined)pair.active=false}
  try{await enrollment.cleanup(config)}catch(error){failure=error}
  // Prune before any request: a retained 404 must not extend automatic recovery.
  if(pruneRetiredPairs(config,now,journal))await saveConfig(dir,config);journal.cleanupRevocations(config.pairs.map(p=>p.pairId),now);
- for(const pairId of statePublications.keys())if(!config.pairs.some(pair=>pair.pairId===pairId))statePublications.delete(pairId);
- activityPublisher.retain(config.cloudEnabled?config.pairs.filter(pair=>pair.active&&pair.relayRetiredAt===undefined&&!journal.pairRevoked(pair.pairId)).map(pair=>pair.pairId):[]);
+ statePublisher.retain(config.cloudEnabled?config.pairs.filter(pair=>pair.active&&pair.relayRetiredAt===undefined&&!journal.pairRevoked(pair.pairId)).map(pair=>pair.pairId):[]);
  for(const origin of retryStates.keys())if(!config.pairs.some(pair=>(pair.apiOrigin||config.apiOrigin)===origin))retryStates.delete(origin);
  // Endpoint revocation must work even when the official daemon is offline.
  if(config.cloudEnabled)for(const pair of config.pairs){if(stopped)break;const origin=pair.apiOrigin||config.apiOrigin;if(!origin||(!pair.active&&pair.revokedAt===undefined&&pair.relayRetiredAt===undefined&&pair.expiresAt!==undefined&&pair.expiresAt<=Date.now()))continue;
@@ -100,22 +98,6 @@ export async function runRuntime(dir:string,version?:string){
  stage=config.cloudEnabled?'cloud-enabled':'local-only';activePairs=config.pairs.filter(p=>p.active&&p.relayRetiredAt===undefined&&!journal.pairRevoked(p.pairId)).length;const events=attentionQueue.splice(0);
  // Persist every active phone's events before the first network send.
  if(config.cloudEnabled)for(const pair of config.pairs.filter(p=>p.active&&p.relayRetiredAt===undefined&&!journal.pairRevoked(p.pairId)))for(const event of events){const bound=await boundAttention(journal,pair,event,official);if(bound)await queueAttention(journal,pair,bound)}
- if(!stopped&&!draining){
-  const candidates=config.pairs.filter(pair=>pair.active&&pair.relayRetiredAt===undefined&&!journal.pairRevoked(pair.pairId)&&clouds.has(pair.pairId));
-  const ordered=[...candidates.slice(activityPairCursor),...candidates.slice(0,activityPairCursor)],activitySnapshot=snapshot,activityOfficial=official;
-  // Schedule cached terminal recovery before any optional normal discovery.
-  // The owned lane never delays command acquisition and is aborted/joined on drain.
-  if(activityLane.start(async signal=>{
-   let optionalFailure:unknown;
-   for(const terminalOnly of [true,false])for(const pair of ordered){
-    signal.throwIfAborted();if(!pair.active||journal.pairRevoked(pair.pairId))continue;
-    const cloud=clouds.get(pair.pairId)!;
-    try{await activityPublisher.publish(pair,cloud,activitySnapshot,Date.now(),(agentId,readSignal)=>activityOfficial.activityTask(agentId,readSignal),{signal,terminalOnly})}
-    catch(error){if(signal.aborted)throw error;optionalFailure??=error}
-   }
-   if(optionalFailure)throw optionalFailure;
-  },error=>{activityFailure=error},AbortSignal.any([controller.signal,drainWake.signal])))activityPairCursor=(activityPairCursor+1)%Math.max(1,candidates.length);
- }
  for(const pair of config.pairs){if(stopped)break;const cloud=clouds.get(pair.pairId);if(!cloud||cycleFences.get(cloud.origin)?.error)continue;try{
  if(pair.daemonServerId&&pair.daemonServerId!==official.info()!.serverId){if(journal.pairRevoked(pair.pairId)||pair.relayRetiredAt!==undefined)continue;throw Error('PAIR_DAEMON_MISMATCH')}
  // A new activation gets no commands/state in this cycle. The next cycle must
@@ -125,16 +107,13 @@ export async function runRuntime(dir:string,version?:string){
  if(await reconcileJournal({pair,journal,official,cloud,clock:Date.now}))failure=Error('RECEIPT_RECONCILIATION_FAILED');
  if(journal.pairRevoked(pair.pairId)||pair.relayRetiredAt!==undefined)continue;
  const active=await activatePending(config,dir,pair,cloud,official.info()!.serverId,snapshot.hostName);if(!active)continue;
+ let detailsCurrent=false;
  try{
- let publication=statePublications.get(pair.pairId);
- // A lost acknowledgement keeps the exact immutable envelope even across a
- // newer measurement. Expired display-only state can yield to a fresh sample.
- if(!publication||publication.envelope.expiresAt<=Date.now()||(publication.acknowledged&&publication.envelope.issuedAt!==snapshot.measuredAt)){
- const payload=await projectSnapshot(snapshot,pair,journal,official.generation);const envelope=await sealEnvelope(decode(pair.rootKey,32),{version:1,pairId:pair.pairId,id:randomUUID(),channel:'state',issuedAt:snapshot.measuredAt,expiresAt:snapshot.measuredAt+LIMITS.snapshotMs},payload);publication={envelope,widgetFingerprint:await widgetFingerprint(pair,payload),acknowledged:false};statePublications.set(pair.pairId,publication)}
- if(!publication.acknowledged){await cloud.state(publication.envelope,publication.widgetFingerprint);publication.acknowledged=true}
+ const payload=await projectSnapshot({...official.notificationSnapshot(),hostName:snapshot.hostName,measuredAt:snapshot.measuredAt},pair,journal,official.generation);
+ detailsCurrent=await statePublisher.publish(pair,cloud,payload);
  }catch(error){failure=error;if(await observeRelayRetirement(config,dir,pair,cloud,error))continue}
  try{await publishResolutions(journal,pair,cloud)}catch(error){failure=error}
- for(const item of journal.attention(pair.pairId,Date.now())){try{await cloud.attention(item.body);journal.attentionSent(pair.pairId,item.id)}catch(error){failure=error}}
+ for(const item of journal.attention(pair.pairId,Date.now())){if(!detailsCurrent&&['question','permission'].includes(item.body.kind))continue;try{await cloud.attention(item.body);journal.attentionSent(pair.pairId,item.id)}catch(error){failure=error}}
  // Publication failures are independent from acquisition. Preserve the normal
  // three-second command/control cadence while still surfacing degraded status.
  try{for(const envelope of await cloud.commands()){if(stopped||cycleFences.get(cloud.origin)?.error)break;try{await executeOperation({pair,journal,official,cloud,clock:Date.now},envelope)}catch(error){failure=error}}}
@@ -151,5 +130,5 @@ export async function runRuntime(dir:string,version?:string){
  if(Number.isFinite(retryWake)&&retryWake>wakeNow)backoff=Math.max(backoff,retryWake-wakeNow);
  if(draining)break;
  await sleep(backoff,undefined,{signal:AbortSignal.any([controller.signal,drainWake.signal])}).catch(()=>{});
- }}finally{process.removeListener('SIGINT',stop);process.removeListener('SIGTERM',stop);process.removeListener('message',parentMessage);process.removeListener('disconnect',parentGone);try{await activityLane.close();detach?.();await official?.close().catch(()=>{})}finally{try{enrollment.close()}finally{try{closeJournal?.()}finally{await release()}}}}
+ }}finally{process.removeListener('SIGINT',stop);process.removeListener('SIGTERM',stop);process.removeListener('message',parentMessage);process.removeListener('disconnect',parentGone);try{detach?.();await official?.close().catch(()=>{})}finally{try{enrollment.close()}finally{try{closeJournal?.()}finally{await release()}}}}
 }

@@ -103,9 +103,7 @@ without contacting cloud.
 
 ### PUT /pairs/{pairId}/state; GET /pairs/{pairId}/state
 
-Host writes, phone reads. PUT accepts strict `{envelope}` or additive
-`{envelope,widgetFingerprint}`; GET returns the envelope only, as specified below.
-Envelope channel is `state`.
+Host writes, phone reads. Body/response contains exactly `{envelope}` with the `state` channel.
 Only the latest nonexpired snapshot keeps ciphertext, monotonic by issuedAt then
 immutable ID. Each state ID/digest remains a conflict guard through its own
 original envelope expiry, including after supersession; no additional24hour
@@ -114,9 +112,14 @@ conflicting IDs/older snapshots never replace newer state. After expiry, a retry
 cannot be admitted as new live state. Supersession clears only the previous
 payload-bearing state, never rewrites older null tombstones. Operation, control,
 attention and minimal authenticated outcome retention is unchanged.
-Encrypted state is a versioned object with verified daemon
-identity, host name, measured timestamp and bounded actual tasks/available usage.
-No complete chat, code files or credentials.
+Encrypted state is limited to `{version:1,daemonServerId,tasks}`. Each task
+contains only `{agentId,pendingRequests}`; each pending request retains its exact
+`requestId`, occurrence-bound `requestBinding` and original supported request.
+This hydrates notification replies and approvals only. It contains no conversation
+titles, directory, host labels, timestamps or usage report. Empty tasks are omitted.
+Writers publish semantic changes, clear resolved requests once, and renew only
+still-pending hydration near its original expiry. Immutable unknown retries keep
+the same ID and bytes. Current-source validation remains mandatory at execution.
 
 ### PUT /pairs/{pairId}/device
 
@@ -398,120 +401,12 @@ host pairing response may contain two bounded proofs. A128KiB response reader
 would permanently reject valid work and is nonconforming. This larger response
 budget never raises the128KiB request or64KiB decrypted command-content limits.
 
-## Opt-in task activities and widget reloads
+### Retired system-surface routes
 
-These additive routes do not change command, receipt, alert, pairing, service,
-or managed-update identities. Cloud remains disabled by default. Every route
-uses the existing pair bearer; subscription IDs and registration IDs are
-lowercase canonical UUIDs. No pair-level activity-device registration exists.
-
-| Route (under `/v1/pairs/{pairId}`) | Role | Exact JSON body | Admission |
-| --- | --- | --- | --- |
-| `PUT /activities/{subscriptionId}` | phone | `{registrationId,token,environment,topic,interest}` | normal |
-| `DELETE /activities/{subscriptionId}` | phone | none | recovery |
-| `GET /activities` | host | none | normal |
-| `PUT /activities/{subscriptionId}/state` | host | `{registrationId,topic,event:"update",envelope}` | normal |
-| `PUT /activities/{subscriptionId}/end` | host | `{registrationId,topic,event:"end",envelope}` | recovery |
-| `PUT /widget-device` | phone | `{registrationId,token,environment}` | normal |
-| `DELETE /widget-device/{registrationId}` | phone | none | recovery |
-
-Tokens are even-length hex,1–256 bytes, normalized lowercase. Environment is
-`sandbox|production`; provider configuration must match. The activity `topic`
-is the existing pair-key HMAC `presenceTopic(rootKey,pairId,agentId)` (32 bytes,
-base64url), not an APNs topic or plaintext agent identity. At most8 live
-subscriptions are admitted per pair. GET returns
-`{ok:true,subscriptions:[{id,registrationId,topic,interest,expiresAt}]}`.
-PUT registration returns the same single row as `{ok:true,subscription:...}`.
-Registration replacement uses a fresh registrationId; different bytes under
-the same registrationId conflict. Native renewal must preserve the ActivityKit
-activity's original8-hour ceiling. DELETE removes queued state immediately.
-Retired subscription/registration IDs share a bounded1000-entry token-free guard
-pool with widget registrations. Delayed registration PUTs cannot resurrect or
-roll back retired identities. Widget DELETE is registration-exact; activity DELETE targets the subscription.
-Activity guards retain the original8h ceiling and widget guards the original24h
-expiry, without retry extension. Unknown DELETEs also reserve bounded guards;
-capacity exhaustion fails closed, never evicts live protection.
-
-The encrypted `interest` uses additive channel `activityInterest`, envelope.id
-equal to subscriptionId, lifetime at most8h. Exact plaintext:
-`{version:1,subscriptionId,daemonServerId,agentId}`. The companion authenticates
-the envelope, pinned daemon, exact subscription and derived topic before any
-read-only task lookup. This plaintext cannot authorize commands. No timeline
-or chat download is required. Existing snapshot cadence (at least30s) admits
-one bounded interest pass, at most8 exact fallback reads outside the recent list.
-The owned optional lane has a2s deadline,250ms SDK reads and request cancellation.
-Commands/control never await it; drain aborts/joins before SDK/journal close. Missing tasks never imply finish.
-
-Activity state uses additive channel `activityState`, fresh envelope UUID and
-at most600s lifetime, capped by subscription expiry. Exact plaintext:
-`{version:1,subscriptionId,daemonServerId,agentId,title,hostName,phase,startedAt,measuredAt,expiresAt,requiresAttention,isTerminal}`.
-Title/hostName are limited to160/80 characters. Phase is
-`running|waiting|finished|error|idle`; permission attention maps to waiting;
-official closed/error or current terminal attention maps to end. A running
-turn supersedes an old terminal attention flag. startedAt is nullable, from
-official activeTurn.startedAt or lastUserMessageAt, never a measurement
-substitute. measuredAt/expiresAt exactly match envelope headers in milliseconds.
-Existing encrypted snapshots also include optional lastUserMessageAt,
-activeTurnStartedAt and bounded cwd per task. Encrypted usage adds genuine
-provider displayName and window/balance label (at most128 characters each),
-preserving absent values as unavailable. No full chats, invented labels or
-synthetic percentages are added.
-
-HKDF salt, AES-GCM nonce/tag framing, metadata AAD and existing channels remain
-byte-compatible. Only the new channel name changes HKDF info. Activity state
-serialized envelope is at most3000 UTF-8 bytes. Native ContentState has default
-Codable field `payload`, a canonical JSON string of that envelope (key order
-version,pairId,id,channel,issuedAt,expiresAt,nonce,ciphertext).
-Updates derive directly from real semantic task transitions, independently of
-alert admission/presence suppression. Unchanged measurements normally do not push.
-Acknowledged nonterminal state renews from fresh samples every8minutes (120s before600s expiry).
-Unknown admissions retain identical ciphertext until expiry; semantic changes can supersede progress. Disconnected state expires.
-
-Live authenticated interests are cached against the current pair key/daemon. Terminal work precedes optional normal discovery, once per fresh
-snapshot, without GET/state admission; authenticated404/409 invalidates its cache.
-Only exact429 `daily_work_limit`, `x-moremote-budget:normal` and consistent future
-`x-moremote-reset`/Retry-After pauses normal work alone. Missing/malformed hints,
-outages, disable or recovery exhaustion preserve origin-wide pause/cycle fences.
-Recovery still requires server admission; hints never grant operation authority.
-
-APNs uses `apns-push-type:liveactivity`, configured main topic plus
-`.push-type.liveactivity`, priority5 update/10 end, collapse-id subscriptionId,
-apns-id envelope.id, expiration floor(expiresAt/1000). Body is
-`{aps:{timestamp,event,"content-state":{payload},"stale-date"}}`; all APNs dates
-are epoch seconds. End additionally sets dismissal-date. There is no apns-event
-header. A512-byte static-attributes reserve and the complete4096-byte provider
-payload limit both apply. End and invalid-token retirement compare the exact
-current registration identity; stale provider failures never remove replacement
-tokens. Provider admission is not proof of rendering.
-
-Existing `PUT /state` accepts strict legacy `{envelope}` or additive
-`{envelope,widgetFingerprint}`. GET state remains unchanged. The new fingerprint
-is a pair-keyed HMAC using the presence domain over JSON
-`["widgetSnapshot",meaningfulProjection]`. Projection includes bounded sorted
-task identity/title/status/attention/latest turn/project plus usage values;
-measurement and usage fetchedAt clocks are excluded. Only a changed opaque
-fingerprint for the current widget registration queues a coalesced push.
-Legacy envelope-only publications do not cause widget pushes.
-
-Widget registration expires after24h and requires foreground/token renewal
-(native renewal around12h uses a fresh registration ID).
-Native uses the WidgetKit token, not an alert or activity token. Explicit
-`APNS_WIDGET_TOPIC` is the widget extension bundle ID plus `.push-type.widgets`;
-it is never derived from the main app topic. APNs uses push-type widgets,
-priority5 and `{aps:{"content-changed":true}}`, no private identifiers.
-WidgetKit automatically reloads timelines opportunistically on receipt;
-WidgetPushHandler observes token/configuration updates. Timeline providers use
-the existing sealed snapshot and its expiry; reload is not realtime delivery.
-See Apple's [WidgetKit push documentation](https://developer.apple.com/documentation/widgetkit/updating-widgets-with-widgetkit-push-notifications).
-
-Activity/widget work shares bounded provider attempts and background batches
-with alerts; no recursive requests, unbounded retries, recovery-budget borrowing
-for progress or changes to endpoint retirement/receipt/updater lifecycle.
-
-Every APNs sender requires a synchronous `BeforeSend = () => boolean` fence
-after asynchronous JWT signing and immediately before transport. The durable
-caller rechecks service enabled, active pair, exact current registration and
-publication, and expiry. Signing shares the original10s attempt deadline;
-late signing cannot start transport. Global budgets and kill deadline are unchanged.
-Physical Live Activity/widget behavior and live APNs/cloud delivery for this
-delta remain pending; provider200 never establishes device delivery.
+Authenticated `/pairs/{pairId}/activities` and descendants, and
+`/pairs/{pairId}/widget-device` and descendants, return `410 surface_removed`.
+No registrations, tokens, interests, states, replay guards or provider queues for
+these features remain. Durable Object initialization purges legacy surface rows;
+notification device, attention, operation and control records remain intact.
+Widgets and local ActivityKit read/update through the official Paseo path and
+shared device state, independently of this notification service.

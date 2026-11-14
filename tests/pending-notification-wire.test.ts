@@ -157,7 +157,8 @@ for(const newer of ['resolution','replacement'] as const)test('boundCurrent cont
  // can synchronize while the older current() promise is adopting its result.
  releaseOlder();releaseNewer();
  const [bound,snapshot]=await Promise.all([delayed.result,fresh.result]);assert.ok(snapshot&&'tasks' in snapshot);
- const expected=snapshot.tasks[0].pendingRequests[0]?.request;
+ const expected=snapshot.tasks[0]?.pendingRequests[0]?.request;
+ if(newer==='resolution')assert.deepEqual(snapshot.tasks,[],'resolved tasks do not become a general cloud directory');
  const occurrence=f.journal.currentOccurrence('synthetic-daemon','synthetic-agent',f.request.id);
  if(newer==='resolution')assert.equal(occurrence,undefined,'the consumer continuation must not revive a retired occurrence');
  else{assert.ok(occurrence);assert.equal(occurrence.fingerprint,digest(canonical(expected)),'the consumer continuation must retain the newer source')}

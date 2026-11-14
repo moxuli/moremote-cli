@@ -92,55 +92,16 @@ snapshots/receipt revisions are not retransmitted each poll. Relay disappearance
 or retirement fences execution but is not authenticated endpoint revocation.
 Retired recovery ends at original child audit deadlines without extending them.
 
-## Optional activity and widget surfaces (unreleased)
+## Notification-only cloud use
 
-Published `@moxuli/moremote` remains0.1.1; these are local source changes,
-not a new release or a reason to alter service/runtime identities. There is no
-new CLI enable flag or separate activity-device command. Existing cloud opt-in,
-active pairing and a compatible phone/relay are prerequisites; official-only
-use remains independent. No deployment or device acceptance is implied.
-
-| Surface | Bound / behavior |
-| --- | --- |
-| Activity interests | Phone-selected, encrypted and pinned to pair/subscription/daemon/task; at most8 live interests per pair, original lifetime at most8h. |
-| Optional host work | Interest discovery no faster than30s; one owned2s cancellation-bounded lane, at most8 exact SDK fallback reads, each bounded250ms. Commands/controls do not await it; drain/stop cancels and joins before closing SDK/journal. |
-| Activity state | At most600s, capped by interest expiry; serialized encrypted envelope at most3000bytes, title160/hostName80 characters. APNs body at most4096bytes with512bytes reserved for static attributes. |
-| Activity renewal | Only acknowledged nonterminal state renews from a fresh official measurement with120s remaining (about8min). Unknown admissions retry identical bytes until expiry; semantic transitions can supersede progress. Missing tasks do not imply completion. |
-| Widget registration | One current WidgetKit token per pair;24h expiry, native foreground renewal around12h with a fresh registration ID. Not the alert/activity token. |
-| Widget reload | Pair-keyed meaningful-change fingerprint on existing state PUT; clocks alone do not trigger reloads. One coalesced signal per changed fingerprint/current registration; legacy envelope-only uploads do not queue pushes. |
-
-The phone registers/deletes tokens and encrypted interests; the CLI never
-registers an official daemon push token or downloads full chat/timeline for
-these surfaces. The relay sees token/environment, IDs, opaque topic/fingerprint,
-envelope times/sizes and ciphertext. Only paired endpoints decrypt task/title,
-host/project and genuine usage values. Apple receives encrypted activity state
-in `ContentState.payload`, or exactly `{aps:{"content-changed":true}}` for widgets.
-Activity/widget pushes do not depend on alert admission or presence suppression.
-
-Terminal recovery uses cached authenticated unexpired interests and fresh
-snapshot facts before optional normal discovery; it needs no normal GET/state
-upload. Only end/delete routes are recovery-eligible, not ordinary updates,
-interest reads or registration. A404/409 publication rejection invalidates that
-cached target; it does not authorize a replacement or a blind replay. Conflicting
-same-registration bytes are409; replacement needs a fresh registration ID.
-Relay retired-identity guards share a1000-entry cap and fail closed rather than
-evicting live protection; guards last through original8h activity/24h widget
-expiry. Delayed registration PUTs cannot roll back replacements; identity-exact
-widget DELETEs and stale provider results cannot retire newer registrations.
-Activity DELETE targets the subscription itself. Expiry never renews through
-retry; stale/offline is not success.
-
-The relay needs explicit `APNS_WIDGET_TOPIC` for the widget extension plus
-`.push-type.widgets`; Live Activity topic is main `APNS_TOPIC` plus
-`.push-type.liveactivity`. Environments must match configured APNs sending.
-These are relay settings, not CLI configuration keys. Default-off, global
-budgets, kill deadline and existing receipt priority remain unchanged.
-Provider signing is inside the original10s attempt deadline; after signing,
-the durable caller rechecks enabled state, active pair, exact current
-registration/publication and expiry immediately before transport.
-APNs200 is provider admission, never display/delivery proof. Physical Live
-Activity, widget reload/freshness/offline behavior and live cloud/APNs acceptance
-for this delta remain pending. Exact routes/crypto: [[specs/03-api-contract]].
+Cloud opt-in owns native notifications, replies and approvals only. Pending forms
+are encrypted with exact request-instance bindings; no titles, usage or general
+task directory leave through `/state`. Current empty state is cleared once and
+is not renewed. Nonempty hydration renews with120seconds remaining of600seconds.
+Unknown publication retries retain their original envelope until expiry; this
+never grants authority to replay an uncertain user action. WidgetKit, ActivityKit
+and ordinary app/extension sends are independent official Paseo clients. No
+activity/widget provider registration or discovery command remains.
 
 ## Service resources
 

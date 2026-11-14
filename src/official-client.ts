@@ -9,7 +9,7 @@ import { isDeepStrictEqual } from 'node:util';
 import { createHostClient, parseHostTarget } from '@getpaseo/client/node';
 import type { DaemonClient } from '@getpaseo/client/internal/daemon-client';
 import { normalizeLoopbackToLocalhost, parseConnectionUri } from '@getpaseo/protocol/daemon-endpoints';
-import type { ServerInfoStatusPayload,AgentSnapshotPayload,ProviderUsage } from '@getpaseo/protocol/messages';
+import type { ServerInfoStatusPayload,AgentSnapshotPayload } from '@getpaseo/protocol/messages';
 import type { Config,Pair } from './config.js';
 import type { Command, OfficialOperations } from './operations.js';
 import { canonical,type ReceiptState,type OperationJournal,type Occurrence } from './journal.js';
@@ -24,9 +24,7 @@ function boundedFile(path:string,max:number){if(statSync(path).size>max)throw Er
 function normalizeTarget(target:string):string|null{try{const t=target.trim();if(t.startsWith('tcp://')){const p=parseConnectionUri(t);return normalizeLoopbackToLocalhost(p.isIpv6?'['+p.host+']:'+p.port:p.host+':'+p.port)}if(t.startsWith('unix://')||t.startsWith('pipe://'))return t;if(t.startsWith('/'))return 'unix://'+t;if(t.startsWith('\\\\.\\pipe\\'))return 'pipe://'+t;if(/^\d+$/.test(t))return 'localhost:'+t;return normalizeLoopbackToLocalhost(t)}catch{return null}}
 export function localListen(home:string){const lock=JSON.parse(boundedFile(join(home,'paseo.pid'),65536));if(typeof lock.listen!=='string'||lock.listen.length>4096)throw Error('INVALID_OFFICIAL_PID');return lock.listen as string}
 export function readLocalCredentialForTarget(home:string,target:string){try{const a=normalizeTarget(target),b=normalizeTarget(localListen(home));if(!a||!b||a!==b)return undefined;const token=boundedFile(join(home,'local-credential'),256).trim();return /^[A-Za-z0-9_-]{43}$/.test(token)?token:undefined}catch{return undefined}}
-export function projectTask(a:AgentSnapshotPayload){return {agentId:a.id,provider:a.provider,title:a.title?.slice(0,160)||null,status:a.status,createdAt:a.createdAt,updatedAt:a.updatedAt,lastUserMessageAt:a.lastUserMessageAt,activeTurnStartedAt:a.activeTurn?.startedAt??null,cwd:a.cwd?.slice(0,1024)||null,requiresAttention:a.requiresAttention||false,attentionReason:a.attentionReason||null,pendingRequests:a.pendingPermissions.slice(0,10).map(request=>({requestId:request.id,request}))}}
-export interface OfficialUsage {fetchedAt:string;providers:ProviderUsage[]}
-export function projectUsage(u:OfficialUsage){return {fetchedAt:u.fetchedAt,providers:u.providers.slice(0,16).map(p=>({providerId:p.providerId.slice(0,128),displayName:p.displayName.slice(0,128),status:p.status,fetchedAt:p.fetchedAt||u.fetchedAt,windows:p.windows.slice(0,8).map(w=>({id:w.id.slice(0,128),label:w.label.slice(0,128),usedPct:w.usedPct??null,remainingPct:w.remainingPct??null,resetsAt:w.resetsAt??null})),balances:p.balances?.slice(0,8).map(b=>({id:b.id.slice(0,128),label:b.label.slice(0,128),used:b.used??null,remaining:b.remaining??null,limit:b.limit??null,unit:b.unit,resetsAt:b.resetsAt??null}))}))}}
+export function projectTask(a:AgentSnapshotPayload){return {agentId:a.id,pendingRequests:a.pendingPermissions.map(request=>({requestId:request.id,request}))}}
 export class OfficialClient implements OfficialOperations{
  readonly sdk:DaemonClient;
  private subscription:ReturnType<DaemonClient['observeEvents']>|undefined;
@@ -37,6 +35,7 @@ export class OfficialClient implements OfficialOperations{
  private terminalReads=new Map<string,TerminalRead>();
  private requestReads=new Set<RequestRead>();
  private observationOrder=0;
+ private pendingTasks=new Map<string,ReturnType<typeof projectTask>>();
  constructor(readonly config:Config,private journal?:OperationJournal){const target=config.target||localListen(config.paseoHome);const password=parseHostTarget(target).password||process.env.PASEO_PASSWORD;
  this.sdk=createHostClient(target,{clientId:config.clientId,clientType:'cli',appVersion:'moremote-cli/0.1.0',...(password?{password}:{localCredential:()=>readLocalCredentialForTarget(config.paseoHome,target)}),reconnect:{enabled:false},connectTimeoutMs:15000,logger:{debug(){},info(){},warn(){},error(){}}});}
  async connect(){await this.sdk.connect();const info=this.info();if(!info||info.features?.explicitEventSubscriptions!==true){await this.sdk.close();throw Error('EXPLICIT_SUBSCRIPTIONS_REQUIRED')}if(this.config.daemonServerId&&info.serverId!==this.config.daemonServerId){await this.sdk.close();throw Error('DAEMON_IDENTITY_CHANGED')}
@@ -53,7 +52,7 @@ export class OfficialClient implements OfficialOperations{
  }else this.readTerminal(event);
  }}
  if(message.type==='agent_permission_request'){const p=message.payload;this.fenceRequestReads(p.agentId,++this.observationOrder);void this.readCurrent(p.agentId,agent=>{const r=agent?.pendingPermissions?.find(r=>r.id===p.request.id);if(r)this.emitRequest(p.agentId,r)}).catch(()=>{})}
- if(message.type==='agent_permission_resolved'){const p=message.payload;this.fenceRequestReads(p.agentId,++this.observationOrder);this.journal?.resolution(this.serverId,p.agentId,p.requestId,this.generation,p.resolution)}
+ if(message.type==='agent_permission_resolved'){const p=message.payload;this.fenceRequestReads(p.agentId,++this.observationOrder);this.journal?.resolution(this.serverId,p.agentId,p.requestId,this.generation,p.resolution);const task=this.pendingTasks.get(p.agentId);if(task){task.pendingRequests=task.pendingRequests.filter(r=>r.requestId!==p.requestId);if(!task.pendingRequests.length)this.pendingTasks.delete(p.agentId)}}
  });
  this.subscription=this.sdk.observeEvents(['agent_attention_required','agent_permission_request','agent_permission_resolved','status.server_info'],{notifications:false});await this.subscription.ready;}
  info():ServerInfoStatusPayload|null{return this.sdk.getLastServerInfoMessage()}
@@ -112,12 +111,18 @@ export class OfficialClient implements OfficialOperations{
    const value=await this.sdk.fetchAgent({agentId,timeout:15000});
    if(!this.acceptRequestRead(read,agentId))return null;
    const agent=value?.agent||null;this.fenceTerminalRead(agentId,agent,read.observedOrder);this.journal?.syncRequests(this.serverId,agentId,this.generation,agent?.pendingPermissions||[]);
+   this.rememberRequests(agentId,agent);
    // Observation, journal synchronization and notification share one fence.
    observe?.(agent);return agent;
   }finally{this.requestReads.delete(read)}
  }
  async current(agentId:string){return this.readCurrent(agentId)}
- async activityTask(agentId:string,signal?:AbortSignal){signal?.throwIfAborted();const observationOrder=++this.observationOrder;const value=await this.sdk.fetchAgent({agentId,timeout:250});signal?.throwIfAborted();this.fenceTerminalRead(agentId,value?.agent||null,observationOrder);return value?.agent?projectTask(value.agent):null}
+ private rememberRequests(agentId:string,agent:AgentSnapshotPayload|null){
+  if(agent?.pendingPermissions.length)this.pendingTasks.set(agentId,projectTask(agent));else this.pendingTasks.delete(agentId);
+ }
+ // Only accepted source reads enter this cache. A limited discovery page cannot
+ // erase a still-current request previously observed through its exact event.
+ notificationSnapshot(){return {version:1,daemonServerId:this.serverId,tasks:structuredClone([...this.pendingTasks.values()])}}
  async send(command:Extract<Command,{type:'send'}>){if(!this.sdk.isConnected)throw Error('OFFICIAL_DISCONNECTED');await this.sdk.sendAgentMessage(command.agentId,command.text,{messageId:command.messageId})}
  async permission(command:Extract<Command,{type:'permission'}>){if(!this.sdk.isConnected)throw Error('OFFICIAL_DISCONNECTED');const result=await this.sdk.respondToPermissionAndWait(command.agentId,command.requestId,command.response,15000);if(!isDeepStrictEqual(result.resolution,command.response))throw Error('RESOLUTION_MISMATCH')}
  async reconcile(command:Command,pair?:Pick<Pair,'pairId'|'rootKey'>):Promise<ReceiptState|null>{return this.reconcileEvidence(evidenceForCommand(command,this.serverId),pair)}
@@ -126,12 +131,11 @@ export class OfficialClient implements OfficialOperations{
  return timeline.entries.some(e=>e.item.type==='user_message'&&e.item.clientMessageId===evidence.messageId&&contentDigest(e.item.text)===evidence.textDigest)?'accepted':null;}
  async snapshot(){const info=this.info();if(!info)throw Error('OFFICIAL_IDENTITY_UNAVAILABLE');const read=this.beginRequestRead();try{const result=await this.sdk.fetchAgents({page:{limit:LIMITS.tasks},filter:{includeArchived:false,includeInternal:false},sort:[{key:'updated_at',direction:'desc'}],timeout:15000});
  const agents=result.entries.slice(0,LIMITS.tasks).map(entry=>entry.agent).filter(agent=>this.acceptRequestRead(read,agent.id));
- for(const a of agents){this.fenceTerminalRead(a.id,a,read.observedOrder);this.journal?.syncRequests(this.serverId,a.id,this.generation,a.pendingPermissions);this.journal?.syncAttention(a.id,a.requiresAttention===true,a.attentionTimestamp?Date.parse(a.attentionTimestamp):null)}
+ for(const a of agents){this.fenceTerminalRead(a.id,a,read.observedOrder);this.journal?.syncRequests(this.serverId,a.id,this.generation,a.pendingPermissions);this.rememberRequests(a.id,a);this.journal?.syncAttention(a.id,a.requiresAttention===true,a.attentionTimestamp?Date.parse(a.attentionTimestamp):null)}
  for(const a of agents){
   for(const request of a.pendingPermissions)this.emitRequest(a.id,request);
   if(a.requiresAttention&&a.attentionReason&&a.attentionReason!=='permission'&&a.attentionTimestamp)this.emit({agentId:a.id,kind:a.attentionReason,timestamp:Date.parse(a.attentionTimestamp)});
  }
- let usage:unknown=null;if(info.features?.providerUsageList){try{usage=projectUsage(await this.sdk.listProviderUsage())}catch{usage=null}}
- return {version:1,daemonServerId:info.serverId,hostName:(info.hostname||hostname()).slice(0,256),measuredAt:Date.now(),tasks:agents.map(projectTask),usage};}finally{this.requestReads.delete(read)}}
- async close(){this.terminalReads.clear();this.requestReads.clear();this.unlisten?.();await this.subscription?.release().catch(()=>{});await this.sdk.close()}
+ return {...this.notificationSnapshot(),hostName:(info.hostname||hostname()).slice(0,256),measuredAt:Date.now()};}finally{this.requestReads.delete(read)}}
+ async close(){this.pendingTasks.clear();this.terminalReads.clear();this.requestReads.clear();this.unlisten?.();await this.subscription?.release().catch(()=>{});await this.sdk.close()}
 }

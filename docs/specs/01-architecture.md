@@ -37,7 +37,7 @@ per-user operation.
 
 ## Components
 
-- **Official adapter:** authenticated local daemon connection, bounded snapshot
+- **Official adapter:** authenticated local daemon connection, bounded local notification discovery
   and authoritative event subscriptions; no fake user focus/read acknowledgements.
 - **Attention projection:** completion, pending question/approval and supported
   errors from typed evidence; no prose classifiers or fabricated progress/usage.
@@ -100,3 +100,16 @@ background-service installer on another OS. No package publication, public Git
 repository, automatic installer execution or production service registration is
 implied by implementation approval. The owner selected Apache-2.0; public
 publication remains separately authorized.
+
+## Notification-only cloud boundary — November 14
+
+The optional companion publishes only current question/approval forms and their
+exact occurrence bindings. It does not request provider usage or upload task
+titles, host/project labels or a conversation directory. Accepted source reads
+retain pending requests outside the bounded recent discovery page; stale reads
+and resolved/replaced occurrences cannot restore them. Publication changes are
+deduplicated; only pending hydration renews near expiry, and one empty publication
+clears the last resolved request. Unknown acknowledgements retain immutable bytes.
+No activity interests, WidgetKit registrations or dedicated surface APNs calls
+remain. Notification control, explicit reply/approval execution, immutable action
+journals and outcome reconciliation retain their original safeguards.

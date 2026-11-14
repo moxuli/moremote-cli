@@ -94,36 +94,18 @@ output. It installs no service. Existing custom origins and per-phone authority
 remain unchanged. Published 0.1.2 requires explicit origin/cloud configuration
 before using that legacy manual path.
 
-## Optional activities and widget reloads — unreleased source
+## Notification-only cloud boundary — unreleased source
 
-Local source adds per-task encrypted Live Activity state and keyed widget-change
-fingerprints. These changes are **not in published 0.1.1**; the package version
-has not changed. They require a compatible native app and separately configured
-relay/APNs capabilities; installing the CLI alone enables neither surface.
-Cloud remains off by default.
-
-The phone owns task selection, encrypted read-only interest and native push
-tokens; the companion authenticates that interest against the pinned daemon and
-publishes bounded official task measurements. Up to eight interests per pairing
-expire within eight hours; activity states expire within ten minutes. Missing
-tasks are not reported finished. Acknowledged ongoing state renews from fresh
-measurements around every eight minutes; lost acknowledgements preserve exact
-ciphertext until expiry. Commands and controls do not await the optional activity
-lane. Widget reloads depend on meaningful snapshot changes, use the existing
-encrypted snapshot and are opportunistic, not realtime delivery.
-
-The relay sees opaque routing/equality tags, registration identities, tokens,
-environment, envelope metadata and ciphertext—not decrypted task titles or
-usage. Apple receives the token and push payload: encrypted activity content or
-a generic widget-change signal. Device rendering, widget freshness/offline
-behavior and APNs delivery for these new surfaces remain **pending acceptance**;
-APNs HTTP 200 means provider admission only. See [operator limits and failure
-semantics](docs/configuration.md#optional-activity-and-widget-surfaces-unreleased)
-and the [living wire contract](docs/specs/03-api-contract.md#opt-in-task-activities-and-widget-reloads).
+Cloudflare supports native notifications and their explicit replies/approvals.
+Widgets, Live Activities and ordinary app/extension sends use official Paseo
+transport and shared device state; the companion no longer discovers activities,
+registers system-surface tokens or uploads usage/directory snapshots. Current
+notification forms retain exact occurrence bindings and immutable retry identity.
+See [configuration](docs/configuration.md#notification-only-cloud-use).
 
 ## What leaves the computer
 
-The cloud sees pairing/operation/event identities, times, sizes, bounded transport states, scoped capability hashes and encrypted command/control/receipt/state/attention bodies. Attention routing includes a separately derived opaque conversation tag; default push text is generic. Endpoint-encrypted snapshots include verified daemon identity, host name, bounded task/title/current raw request metadata and actual available usage. Original supported question/approval forms are included only within strict bounds, to answer that exact request. No complete chat/history, code files, model keys or official Paseo passwords/local credentials are uploaded. The relay cannot decrypt or manufacture accepted commands. This is not forward secrecy.
+The cloud sees pairing/operation/event identities, times, sizes, bounded transport states, scoped capability hashes and encrypted command/control/receipt/state/attention bodies. Attention routing includes a separately derived opaque conversation tag; default push text is generic. Endpoint-encrypted notification state includes only verified daemon identity and current occurrence-bound question/approval forms. Original supported question/approval forms are included only within strict bounds, to answer that exact request. No complete chat/history, code files, model keys or official Paseo passwords/local credentials are uploaded. The relay cannot decrypt or manufacture accepted commands. This is not forward secrecy.
 
 Only exact message sends and responses to an **actual current** question/approval are supported. Admission accepted is not task completion. Unknown official outcomes are reconciled, **never blindly resent**, even when the same message ID is available.
 Endpoint cancellation/revocation uses authenticated encrypted controls and durable local tombstones, not trust in a cloud DELETE result. An offline/withheld control is waiting/unknown, not endpoint-confirmed. A dispatched operation is too late to undo. Exact request-instance bindings retire on source/resolution/connection changes. Minimal revisioned encrypted receipts remain auditable for24h after original expiry, separately from short-lived user payloads; positive admission never regresses to unknown.
@@ -150,3 +132,9 @@ Default CLI state uses `LOCALAPPDATA/MoRemoteCLI` on Windows, `~/Library/Applica
 
 Public release prerequisites, existing-secret setup and exact verification commands:
 [releasing](docs/releasing.md). Checked-in workflows are not proof of a published package.
+
+Widgets, Live Activities and ordinary app/extension sends connect through Paseo
+and local device state. They do not use this Cloudflare notification service.
+Current request forms remain encrypted here only for notification replies and
+approvals; no task directory or usage feed is uploaded. Source changes are
+unreleased; existing production is unchanged until a separately authorized rollout.

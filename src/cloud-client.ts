@@ -20,9 +20,7 @@ function recoveryRequest(method:string,path:string){
  if(method==='DELETE'&&!suffix.length)return true;
  if(suffix[0]==='controls')return suffix.length===1&&['GET','POST'].includes(method)||suffix.length===2&&method==='GET'||suffix.length===3&&suffix[2]==='receipt'&&method==='POST';
  if(suffix[0]==='commands')return suffix.length===2&&method==='GET'||suffix.length===3&&suffix[2]==='receipt'&&method==='POST';
- return suffix[0]==='attention'&&suffix.length===3&&suffix[2]==='resolve'&&method==='POST'
-  ||suffix[0]==='activities'&&(suffix.length===2&&method==='DELETE'||suffix.length===3&&suffix[2]==='end'&&method==='PUT')
-  ||suffix[0]==='widget-device'&&suffix.length===2&&method==='DELETE';
+ return suffix[0]==='attention'&&suffix.length===3&&suffix[2]==='resolve'&&method==='POST';
 }
 export class CloudClient{
  readonly origin:string;
@@ -68,11 +66,9 @@ export class CloudClient{
  async commands():Promise<Envelope[]>{const result=await this.request('GET',this.path('/commands'));if(!Array.isArray(result.commands)||result.commands.length>100)throw Error('INVALID_COMMAND_PAGE');return result.commands.map(row=>object(row).envelope as Envelope).filter(Boolean)}
  async dispatch(id:string){const r=await this.request('POST',this.path('/commands/'+id+'/dispatch'),{});if(typeof r.dispatchAllowed!=='boolean')throw Error('INVALID_DISPATCH_RESPONSE');return {dispatchAllowed:r.dispatchAllowed}}
  receipt(id:string,body:{state:ReceiptState;revision:number;envelope:Envelope}){return this.request('POST',this.path('/commands/'+id+'/receipt'),body)}
- state(envelope:Envelope,widgetFingerprint?:string){return this.request('PUT',this.path('/state'),{envelope,...(widgetFingerprint?{widgetFingerprint}:{})})}
+ state(envelope:Envelope){return this.request('PUT',this.path('/state'),{envelope})}
  attention(body:unknown){return this.request('POST',this.path('/attention'),body)}
  async controls():Promise<Envelope[]>{const result=await this.request('GET',this.path('/controls'));if(!Array.isArray(result.controls)||result.controls.length>100)throw Error('INVALID_CONTROL_PAGE');return result.controls.map(row=>object(row).envelope as Envelope).filter(Boolean)}
  controlReceipt(id:string,body:{envelope:Envelope}){return this.request('POST',this.path('/controls/'+id+'/receipt'),body)}
  resolveAttention(id:string,resolvedAt:number){return this.request('POST',this.path('/attention/'+id+'/resolve'),{resolvedAt})}
- async activities(signal?:AbortSignal):Promise<unknown[]>{const result=await this.request('GET',this.path('/activities'),undefined,signal);if(!Array.isArray(result.subscriptions)||result.subscriptions.length>8)throw Error('INVALID_ACTIVITY_PAGE');return result.subscriptions}
- activityState(id:string,body:{registrationId:string;topic:string;event:'update'|'end';envelope:Envelope},signal?:AbortSignal){return this.request('PUT',this.path('/activities/'+id+(body.event==='end'?'/end':'/state')),body,signal)}
 }

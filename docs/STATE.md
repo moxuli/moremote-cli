@@ -1,4 +1,24 @@
-# Current state — 2026-11-13
+# Current state — 2026-11-14
+
+## Unreleased notification-only source — 2026-11-14
+
+Cloudflare retains only notifications and explicit notification replies/approvals.
+Deleted activity interests, optional surface lane, widget fingerprints and quota
+reads. `/state` contains verified daemon identity and exact current bound requests
+only. Accepted source reads retain pending requests outside bounded discovery;
+resolution/replacement/reconnect fences prevent stale resurrection. Publish only
+semantic changes, one final clear, and near-expiry pending hydration. Unknown
+ACK retries keep original bytes and cannot replay user actions.
+
+Fresh full `npm run check` passes237 behavioral tests, types and compilation.
+Real SDK and real runtime subprocess consumers verify preserved notification
+question/approval encoding,3s control cadence, normal/outage pause fences,
+immutable lost acknowledgements, drain/receipt ownership and zero idle surface or
+directory calls. Projection tests first exposed leaked title/host/usage fields
+and silently dropped oversized requests; all now pass. Read-only independent
+review found no remaining authority/replay blocker. No service registration,
+installed runtime, npm publication or production host session was changed.
+Published0.1.4 below remains the released artifact, not this new source.
 
 ## Released0.1.4 — 2026-11-13
 
@@ -85,7 +105,7 @@
 
 ## Scope
 
-Owner-approved notification/scoped delivery and local activity/widget integration; Apache-2.0. Standalone Node24 companion targeting inspected official SDK/protocol0.15.3. Existing iOS protocol-vector floor is independent and unchanged. OpenUI and broader system extensions remain outside this scope.
+Owner-approved notification/scoped delivery; local native surfaces are app-owned; Apache-2.0. Standalone Node24 companion targeting inspected official SDK/protocol0.15.3. Existing iOS protocol-vector floor is independent and unchanged. OpenUI and broader system extensions remain outside this scope.
 
 ## Unreleased single-pairing enrollment — source0.1.3, locally accepted
 

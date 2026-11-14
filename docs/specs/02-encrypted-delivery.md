@@ -150,10 +150,10 @@ survive payload TTL for24hours after original expiry, including after revoke.
 Historical decoding is read-only and cannot extend command authority. After
 retention, the outcome is unavailable/unverifiable, not a cloud-only success.
 
-State snapshots are encrypted, size-bounded and timestamped. They contain useful
-current task/attention/real available-usage summaries, not the full conversation.
-The phone can preserve a stale snapshot with its original timestamp, never show
-it as a freshly measured host state. State is display-only, not an operation
+State is encrypted, size-bounded notification hydration: verified daemon identity
+and exact current request forms/bindings only. Directory, titles and usage are
+excluded. A stale form is never execution authority; the host must validate the
+current occurrence again before an explicit notification response. State is display-only, not an operation
 outcome audit: only the latest nonexpired snapshot keeps ciphertext, while each
 immutable state ID/digest survives supersession only through that envelope's
 original expiry. Exact retries do not renew it; expired snapshots cannot be newly

@@ -9,10 +9,10 @@ import {join} from 'node:path';
 import {fileURLToPath} from 'node:url';
 import {tmpdir} from 'node:os';
 import {WebSocketServer} from 'ws';
-import {wrapSessionMessage} from '@getpaseo/protocol/messages';
+import {AgentSnapshotPayloadSchema,wrapSessionMessage} from '@getpaseo/protocol/messages';
 import {saveConfig,loadConfig} from '../src/config.ts';
 import {OperationJournal} from '../src/journal.ts';
-import {sealEnvelope,openEnvelope,presenceTopic,type Envelope} from '../src/crypto.ts';
+import {sealEnvelope,openEnvelope,type Envelope} from '../src/crypto.ts';
 import {requestControl,controlEndpoint} from '../src/control.ts';
 
 const pairId='11111111-1111-4111-8111-111111111111',id='22222222-2222-4222-8222-222222222222',day=86400000;
@@ -22,17 +22,13 @@ const pairId='11111111-1111-4111-8111-111111111111',id='22222222-2222-4222-8222-
 async function until(predicate:()=>boolean|Promise<boolean>,message:string,ms=12000){const end=performance.now()+ms;while(performance.now()<end){if(await predicate())return;await sleep(30)}throw Error(message)}
 async function bounded<T>(promise:Promise<T>,ms:number,message:string){const deadline=Promise.withResolvers<never>();const timer=setTimeout(()=>deadline.reject(Error(message)),ms);timer.unref();try{return await Promise.race([promise,deadline.promise])}finally{clearTimeout(timer)}}
 async function body(req:IncomingMessage){let value='';for await(const chunk of req)value+=chunk;return value?JSON.parse(value):null}
-async function fixture(options:{stallActivities?:boolean;activityInterests?:number;receiptFailure?:boolean;stateLosses?:number;retired?:boolean;missing?:boolean;transient?:boolean;stallSnapshot?:boolean;snapshotDelayMs?:number;seedReceipt?:boolean;pause?:{path:'controls'|'state'|'receipt';status:429|503;seconds:number}}={}){
+async function fixture(options:{pending?:boolean;receiptFailure?:boolean;stateLosses?:number;retired?:boolean;missing?:boolean;transient?:boolean;stallSnapshot?:boolean;snapshotDelayMs?:number;seedReceipt?:boolean;pause?:{path:'controls'|'state'|'receipt';status:429|503;seconds:number}}={}){
  // A short private fixture root avoids Darwin's sockaddr_un limit even when TMPDIR is long.
  // Production socket placement/ownership checks remain unchanged.
  const root=await mkdtemp(join(process.platform==='win32'?tmpdir():'/tmp','mrr-')),dir=join(root,'c');
  const daemon=new WebSocketServer({host:'127.0.0.1',port:0});await once(daemon,'listening');const daemonAddress=daemon.address();assert.ok(daemonAddress&&typeof daemonAddress!=='string');
  const counts={controls:0,commands:0,pair:0,receipts:0,attention:0,snapshots:0,mutations:0};const states:string[]=[];const controlsAt:number[]=[];const requests:{path:string;method:string;at:number;body:unknown}[]=[];let pauseAt=0;let child:ChildProcess|undefined;let exited:Promise<unknown>|undefined;
- const interestTime=Date.now(),subscriptions=await Promise.all(Array.from({length:options.activityInterests??0},async(_,index)=>{
-  const suffix=index.toString(16).padStart(12,'0'),subscriptionId='aaaaaaaa-aaaa-4aaa-8aaa-'+suffix,agentId='absent-'+index;
-  return {id:subscriptionId,registrationId:'bbbbbbbb-bbbb-4bbb-8bbb-'+suffix,topic:await presenceTopic(Buffer.alloc(32,7),pairId,agentId),expiresAt:interestTime+8*3600000,
-   interest:await sealEnvelope(Buffer.alloc(32,7),{version:1,pairId,id:subscriptionId,channel:'activityInterest',issuedAt:interestTime,expiresAt:interestTime+8*3600000},{version:1,subscriptionId,daemonServerId:'d',agentId})};
- }));
+ const syntheticAgent=AgentSnapshotPayloadSchema.parse({id:'a',provider:'claude',cwd:'/private/project',model:null,createdAt:'2026-01-01T00:00:00Z',updatedAt:'2026-01-01T00:00:00Z',lastUserMessageAt:null,status:'running',capabilities:{supportsStreaming:true,supportsSessionPersistence:true,supportsDynamicModes:false,supportsMcpServers:false,supportsReasoningStream:false,supportsToolInvocations:true},currentModeId:null,availableModes:[],pendingPermissions:options.pending===false?[]:[{id:'pending-plan',provider:'claude',name:'Plan',kind:'plan',actions:[{id:'yes',label:'Implement',behavior:'allow'}],input:{plan:'Synthetic plan'}}],persistence:null,title:'Private task'});
  const relay=createServer(async(req,res)=>{const path=req.url||'';const value=await body(req);requests.push({path,method:req.method||'',at:performance.now(),body:value});res.setHeader('Content-Type','application/json');const fail=(code:string,http=409)=>{res.writeHead(http);res.end(JSON.stringify({ok:false,error:{code,message:'Synthetic fixture failure'}}))};
   if(options.pause&&!pauseAt&&path.endsWith('/'+options.pause.path)){pauseAt=performance.now();res.setHeader('Retry-After',String(options.pause.seconds));return fail('cost_guard_closed',options.pause.status)}
   if(path.endsWith('/controls')){counts.controls++;controlsAt.push(performance.now());if(options.missing)return fail('pair_not_found',404);if(options.transient)return fail('temporarily_unavailable',503);return res.end(JSON.stringify({ok:true,controls:[]}))}
@@ -40,16 +36,15 @@ async function fixture(options:{stallActivities?:boolean;activityInterests?:numb
   if(path.endsWith('/commands')){counts.commands++;if(options.retired)return fail('pair_not_active');return res.end(JSON.stringify({ok:true,commands:[],hasMore:false}))}
   if(path.endsWith('/state')){states.push(JSON.stringify(value.envelope));if(options.retired)return fail('pair_not_active');if(states.length<=(options.stateLosses||0)){res.destroy();return}return res.end(JSON.stringify({ok:true}))}
   if(path.endsWith('/attention')){counts.attention++;return res.end(JSON.stringify({ok:true}))}
-  if(path.endsWith('/activities')){if(options.retired)return fail('pair_not_active');if(options.stallActivities)return;return res.end(JSON.stringify({ok:true,subscriptions}))}
   counts.pair++;if(options.missing)return fail('pair_not_found',404);res.end(JSON.stringify({ok:true,pair:{state:options.retired?'revoked':'active',pendingClaim:null,activationProof:null}}));
  });relay.listen(0,'127.0.0.1');await once(relay,'listening');const relayAddress=relay.address();assert.ok(relayAddress&&typeof relayAddress!=='string');
- daemon.on('connection',socket=>{const reply=(message:unknown)=>socket.send(JSON.stringify(wrapSessionMessage(message)));socket.on('message',data=>{const f=JSON.parse(data.toString());if(f.type==='hello')reply({type:'status',payload:{status:'server_info',serverId:'d',hostname:'Synthetic',features:{explicitEventSubscriptions:true,ownedSubscriptions:true}}});else if(f.type==='ping')socket.send(JSON.stringify({type:'pong'}));else if(f.type==='session'){const m=f.message;if(m.type==='session.events.set_subscription.request')reply({type:'session.events.set_subscription.response',payload:{requestId:m.requestId,subscriptionId:'s'}});else if(m.type==='fetch_agents_request'){counts.snapshots++;if(!options.stallSnapshot)void sleep(options.snapshotDelayMs||0,undefined,{ref:false}).then(()=>{if(socket.readyState===1)reply({type:'fetch_agents_response',payload:{requestId:m.requestId,entries:[],pageInfo:{nextCursor:null,prevCursor:null,hasMore:false}}})})}else if(m.type==='subscription.release.request')reply({type:'subscription.release.response',payload:{requestId:m.requestId}});else if(m.type==='send_agent_message_request'||m.type==='agent_permission_response')counts.mutations++}})});
+ daemon.on('connection',socket=>{const reply=(message:unknown)=>socket.send(JSON.stringify(wrapSessionMessage(message)));socket.on('message',data=>{const f=JSON.parse(data.toString());if(f.type==='hello')reply({type:'status',payload:{status:'server_info',serverId:'d',hostname:'Synthetic',features:{explicitEventSubscriptions:true,ownedSubscriptions:true}}});else if(f.type==='ping')socket.send(JSON.stringify({type:'pong'}));else if(f.type==='session'){const m=f.message;if(m.type==='session.events.set_subscription.request')reply({type:'session.events.set_subscription.response',payload:{requestId:m.requestId,subscriptionId:'s'}});else if(m.type==='fetch_agents_request'){counts.snapshots++;if(!options.stallSnapshot)void sleep(options.snapshotDelayMs||0,undefined,{ref:false}).then(()=>{if(socket.readyState===1)reply({type:'fetch_agents_response',payload:{requestId:m.requestId,entries:[{agent:syntheticAgent,project:{projectKey:'project',projectName:'Private project',checkout:{cwd:syntheticAgent.cwd,isGit:true,currentBranch:null,remoteUrl:null,isPaseoOwnedWorktree:false}}}],pageInfo:{nextCursor:null,prevCursor:null,hasMore:false}}})})}else if(m.type==='subscription.release.request')reply({type:'subscription.release.response',payload:{requestId:m.requestId}});else if(m.type==='send_agent_message_request'||m.type==='agent_permission_response')counts.mutations++}})});
  const pair={pairId,rootKey:Buffer.alloc(32,7).toString('base64url'),hostToken:Buffer.alloc(32,8).toString('base64url'),active:true,daemonServerId:'d'};
  await saveConfig(dir,{version:1,clientId:'moremote-cli-runtime-test',target:'tcp://127.0.0.1:'+daemonAddress.port+'?password=synthetic',paseoHome:join(root,'official'),daemonServerId:'d',apiOrigin:'http://127.0.0.1:'+relayAddress.port,allowLoopbackHttp:true,cloudEnabled:true,pairs:[pair]});
  const now=Date.now();const journal=new OperationJournal(join(dir,'journal.sqlite'));try{
   const command=await sealEnvelope(Buffer.alloc(32,7),{version:1,pairId,id,channel:'command',issuedAt:now,expiresAt:now+300000},{type:'send',agentId:'a',messageId:id,text:'synthetic'});journal.prepare(command);journal.dispatched(pairId,id);
   if(options.seedReceipt){const receipt=await sealEnvelope(Buffer.alloc(32,7),{version:1,pairId,id,channel:'receipt',issuedAt:now,expiresAt:now+600000},{operationId:id,state:'accepted',revision:1});journal.outcome(pairId,id,'accepted',receipt)}
-  const attentionId='33333333-3333-4333-8333-333333333333';const envelope=await sealEnvelope(Buffer.alloc(32,7),{version:1,pairId,id:attentionId,channel:'attention',issuedAt:now,expiresAt:now+600000},{agentId:'a',kind:'finished',timestamp:now});journal.queueAttention(pairId,attentionId,envelope.expiresAt,{id:attentionId,kind:'finished',topic:'synthetic',envelope},{agentId:'a'});
+  const attentionId='33333333-3333-4333-8333-333333333333';const envelope=await sealEnvelope(Buffer.alloc(32,7),{version:1,pairId,id:attentionId,channel:'attention',issuedAt:now,expiresAt:now+600000},{agentId:'finished-agent',kind:'finished',timestamp:now});journal.queueAttention(pairId,attentionId,envelope.expiresAt,{id:attentionId,kind:'finished',topic:'synthetic',envelope},{agentId:'finished-agent'});
  }finally{journal.close()}
  const stop=async()=>{
   if(child&&child.exitCode===null&&child.signalCode===null){await bounded(requestControl(dir,'stop'),2200,'STOP_REQUEST_TIMEOUT').catch(()=>{});try{await bounded(exited!,2200,'RUNTIME_STOP_TIMEOUT')}catch{child.kill('SIGKILL');await bounded(exited!,2200,'RUNTIME_KILL_TIMEOUT')}}
@@ -63,9 +58,9 @@ test('actual runtime keeps notifications and command acquisition alive at 3s cad
  const f=await fixture({receiptFailure:true,stateLosses:20,seedReceipt:true});try{f.start();await until(()=>f.counts.commands>=3,'RECEIPT_OR_STATE_BLOCKED_COMMANDS');assert.ok(f.counts.receipts>=3);assert.equal(f.counts.attention,1);assert.equal(f.counts.pair,0);assert.equal(f.states.length,3);assert.equal(new Set(f.states).size,1);assert.ok(f.controlsAt[2]-f.controlsAt[0]<8500,'isolated publication failures must not back off command/control acquisition');await until(async()=>{const status=await requestControl(f.dir,'status');return status?.stage==='degraded'&&typeof status.lastError==='string'},'PUBLICATION_FAILURE_WAS_HIDDEN');assert.equal(f.counts.mutations,0)}finally{await f.close()}
 });
 
-test('actual runtime publishes each measured state once after exact lost-ack retry, without active-pair GET or fake freshness',{timeout:20000},async()=>{
- const f=await fixture({stateLosses:2,seedReceipt:true});try{f.start();await until(()=>f.counts.commands>=1,'INITIAL_CYCLE_MISSING');const first=JSON.parse(f.states[0]) as Envelope;const plain=await openEnvelope(Buffer.alloc(32,7),first);assert.ok(plain&&typeof plain==='object'&&'measuredAt' in plain);assert.equal(plain.measuredAt,first.issuedAt);f.advance(31000);
-  await until(()=>f.counts.commands>=4,'IDLE_CYCLES_MISSING');assert.equal(f.counts.pair,0);assert.equal(f.counts.snapshots,2);assert.equal(f.states.length,4);assert.equal(f.states[0],f.states[1]);assert.equal(f.states[1],f.states[2],'lost-ack retry must survive a newer measurement');const next=JSON.parse(f.states[3]) as Envelope;assert.notEqual(next.id,first.id);assert.ok(next.issuedAt>=first.issuedAt+30000);assert.equal(next.expiresAt-next.issuedAt,600000);assert.equal(f.counts.receipts,1);await until(()=>f.counts.commands>=5,'ACKNOWLEDGED_IDLE_CYCLE_MISSING');assert.equal(f.states.length,4,'acked state must stay silent until another actual measurement');
+test('actual runtime retries exact notification hydration then stays silent across unchanged measurements',{timeout:20000},async()=>{
+ const f=await fixture({stateLosses:2,seedReceipt:true});try{f.start();await until(()=>f.counts.commands>=1,'INITIAL_CYCLE_MISSING');const first=JSON.parse(f.states[0]) as Envelope;const plain=await openEnvelope(Buffer.alloc(32,7),first);assert.deepEqual(Object.keys(plain as object).sort(),['daemonServerId','tasks','version']);f.advance(31000);
+  await until(()=>f.counts.commands>=4,'IDLE_CYCLES_MISSING');assert.equal(f.counts.pair,0);assert.equal(f.counts.snapshots,2);assert.equal(f.states.length,3);assert.equal(f.states[0],f.states[1]);assert.equal(f.states[1],f.states[2],'lost-ack retry must survive a newer measurement');assert.equal(f.counts.receipts,1);await until(()=>f.counts.commands>=5,'ACKNOWLEDGED_IDLE_CYCLE_MISSING');assert.equal(f.states.length,3,'unchanged measurements must not publish new notification hydration');
  }finally{await f.close()}
 });
 
@@ -108,33 +103,12 @@ test('parent update drain completes the actual in-flight cycle and releases jour
  }finally{await f.close()}
 });
 
-test('actual runtime polls activity interests only on snapshot cadence and emits stable keyed widget fingerprints without official mutations',{timeout:15000},async()=>{
- const f=await fixture();try{
+test('idle runtime never polls cloud system surfaces or publishes directory state',{timeout:15000},async()=>{
+ const f=await fixture({pending:false});try{
   f.start();await until(()=>f.counts.commands>=2,'INITIAL_CADENCE_NOT_REACHED');
-  const first=f.requests.filter(request=>request.path.endsWith('/activities'));assert.equal(first.length,1);assert.equal(first[0].method,'GET');
-  const stateRequests=f.requests.filter(request=>request.path.endsWith('/state'));
-  assert.ok(stateRequests.length);const stateBody=stateRequests[0].body;
-  assert.ok(stateBody&&typeof stateBody==='object'&&'widgetFingerprint' in stateBody);
-  assert.match(String(stateBody.widgetFingerprint),/^[A-Za-z0-9_-]{43}$/);
-  f.advance(31000);await until(()=>f.requests.filter(request=>request.path.endsWith('/activities')).length===2,'SNAPSHOT_INTEREST_REFRESH_NOT_REACHED');
-  const refreshed=f.requests.filter(request=>request.path.endsWith('/state')).at(-1)?.body;
-  assert.ok(refreshed&&typeof refreshed==='object'&&'widgetFingerprint' in refreshed);
-  assert.equal(refreshed.widgetFingerprint,stateBody.widgetFingerprint,'measurement-only state changes must not trigger widget push');
+  f.advance(31000);await until(()=>f.counts.snapshots>=2&&f.counts.commands>=3,'LOCAL_DISCOVERY_NOT_REPEATED');
+  assert.equal(f.states.length,0);
+  assert.equal(f.requests.some(r=>/activities|widget-device/.test(r.path)),false);
   assert.equal(f.counts.mutations,0);
- }finally{await f.close()}
-});
-
-for(const options of [{stallActivities:true},{activityInterests:8}])test(`stalled optional activity work cannot delay real command/control acquisition: ${JSON.stringify(options)}`,{timeout:12000},async()=>{
- const f=await fixture(options);try{
-  f.start();await until(()=>f.counts.commands>=3,'ACTIVITY_WORK_BLOCKED_COMMANDS',10000);
-  assert.ok(f.controlsAt[2]-f.controlsAt[0]<8000,'optional activity work must not lengthen the critical three-second cadence');
-  assert.equal(f.counts.mutations,0);
- }finally{await f.close()}
-});
-test('drain aborts and joins an outstanding optional activity request without waiting its twenty-second timeout',{timeout:6000},async()=>{
- const f=await fixture({stallActivities:true});try{
-  f.start();await until(()=>f.requests.some(request=>request.path.endsWith('/activities'))&&f.counts.commands===1,'OPTIONAL_REQUEST_NOT_IN_FLIGHT',3000);
-  const started=performance.now();f.drain();await until(()=>!f.alive(),'OPTIONAL_REQUEST_BLOCKED_DRAIN',1500);
-  assert.ok(performance.now()-started<1500);assert.equal(f.counts.mutations,0);
  }finally{await f.close()}
 });
