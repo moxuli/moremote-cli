@@ -1,6 +1,15 @@
 # Current state — 2026-11-14
 
-## Unreleased notification-only source — 2026-11-14
+## Released0.1.5 — 2026-11-14
+
+Owner-authorized tagv0.1.5 targets `ba8a428b63562cdd4b258cd79f7a8251af067dbd`.
+GitHub CI43567209765 passes complete checks and real packaged upgrade/rollback
+on Windows, Linux and macOS. Release43567215583 succeeds through the existing
+scoped-secret npm/provenance and GitHub publication workflow. Anonymous registry
+readback confirms version/latest0.1.5. The public npm and GitHub tarballs are
+byte-identical, match registry SHA512 and GitHub SHA256SUMS, and the isolated
+public installation reports0.1.5. Tarball:137104bytes, SHA256
+`8ad64844cab23dea5c0295e6e9b7ef3d4f0e88785c517ec182c783bdd23147dd`.
 
 Cloudflare retains only notifications and explicit notification replies/approvals.
 Deleted activity interests, optional surface lane, widget fingerprints and quota
@@ -16,9 +25,12 @@ question/approval encoding,3s control cadence, normal/outage pause fences,
 immutable lost acknowledgements, drain/receipt ownership and zero idle surface or
 directory calls. Projection tests first exposed leaked title/host/usage fields
 and silently dropped oversized requests; all now pass. Read-only independent
-review found no remaining authority/replay blocker. No service registration,
-installed runtime, npm publication or production host session was changed.
-Published0.1.4 below remains the released artifact, not this new source.
+review found no remaining authority/replay blocker. The initial local aliased
+frontend smoke exceeded its10second budget during concurrent builds; the exact
+preserved frontend subsequently ran in0.58seconds, and the complete unchanged
+upgrade/rollback smoke passed. No timeout or production behavior was relaxed.
+No everyday service, installed runtime or production host session was changed.
+The previous0.1.4 publication below remains historical.
 
 ## Released0.1.4 — 2026-11-13
 
