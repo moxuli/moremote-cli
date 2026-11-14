@@ -1,3 +1,5 @@
+# Project state
+
 ## Public0.1.7 — 2026-11-15
 
 Reviewed sourceb6756ca is public as0.1.7. All3OS CI43645424293 and release
@@ -8,9 +10,8 @@ local250tests, types/build, packaged upgrade/rollback and audit0 pass. See
 or physical APNs delivery is implied. Corresponding native/service rollout is
 separately recorded; prior local-only checkpoints below remain historical.
 
-# Project state
 
-## Remote activity delivery — 2026-11-15, unreleased
+## Earlier local remote activity checkpoint — before0.1.7
 
 The owner-authorized v2 path shares CLI attention/activity event ingress and the
 existing APNs infrastructure. Native foreground-started activities receive encrypted
@@ -22,7 +23,7 @@ skips, App83, real system journeys2and unsigned Release all pass. See
 
 Updated: 2026-11-15
 
-## Informative notification previews — local and unreleased
+## Earlier local notification preview checkpoint — before0.1.7
 
 Optional endpoint-encrypted session/host/current-content previews are implemented
 on `fix/notification-content-1115`, with unchanged action/route authority, exact
@@ -30,7 +31,7 @@ retries and original expiry. No new package, Worker or physical APNs acceptance
 is claimed. Final local checks and compatibility/review evidence:
 [[2026-11-15-informative-notifications-and-settings]].
 
-## Current public release
+## Previous public release0.1.6
 
 `@moxuli/moremote@0.1.6` is independently available and installable. Source
 `c38e2b07adc88e6fd5f4e18ef9c41fb87b51f9b9`, immutable tagv0.1.6,
