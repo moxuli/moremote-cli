@@ -1,3 +1,13 @@
+## Public0.1.7 — 2026-11-15
+
+Reviewed sourceb6756ca is public as0.1.7. All3OS CI43645424293 and release
+43646031281 pass; anonymous registry download/install and exact frontend version
+verify availability. Tested/npm/GitHub archive bytes and integrity match. Final
+local250tests, types/build, packaged upgrade/rollback and audit0 pass. See
+[[2026-11-15-informative-notifications-activity-release]]. No real host service
+or physical APNs delivery is implied. Corresponding native/service rollout is
+separately recorded; prior local-only checkpoints below remain historical.
+
 # Project state
 
 ## Remote activity delivery — 2026-11-15, unreleased
