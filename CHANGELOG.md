@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.1.5 — 2026-11-14
 
 - Limit Cloudflare to notifications and their explicit reply/approval/control lifecycle. Remove activity/widget registration, discovery, dedicated provider delivery and general directory/usage publication; retain immutable uncertain-action receipts.
 - Preserve notification reply/approval execution, exact request-instance validation and3s control/outcome acquisition across all surface removals.

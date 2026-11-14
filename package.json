@@ -1,15 +1,38 @@
 {
   "name": "@moxuli/moremote",
-  "version": "0.1.4",
+  "version": "0.1.5",
   "description": "Optional encrypted notification and scoped-action companion for Paseo",
   "license": "Apache-2.0",
   "type": "module",
-  "repository": {"type": "git", "url": "git+https://github.com/moxuli/moremote-cli.git"},
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/moxuli/moremote-cli.git"
+  },
   "homepage": "https://github.com/moxuli/moremote-cli#readme",
-  "bugs": {"url": "https://github.com/moxuli/moremote-cli/issues"},
-  "publishConfig": {"access": "public", "registry": "https://registry.npmjs.org"},
-  "moremote": {"updateProtocol": 1, "journalSchema": 1, "wireProtocol": 1, "localEnrollment": 1, "configBytes": 524288},
-  "files": ["bin", "dist", "docs", "vectors", "licenses", "LICENSE", "NOTICE", "README.md"],
+  "bugs": {
+    "url": "https://github.com/moxuli/moremote-cli/issues"
+  },
+  "publishConfig": {
+    "access": "public",
+    "registry": "https://registry.npmjs.org"
+  },
+  "moremote": {
+    "updateProtocol": 1,
+    "journalSchema": 1,
+    "wireProtocol": 1,
+    "localEnrollment": 1,
+    "configBytes": 524288
+  },
+  "files": [
+    "bin",
+    "dist",
+    "docs",
+    "vectors",
+    "licenses",
+    "LICENSE",
+    "NOTICE",
+    "README.md"
+  ],
   "engines": {
     "node": ">=24.13.0 <25"
   },
