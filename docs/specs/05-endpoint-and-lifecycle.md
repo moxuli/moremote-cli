@@ -123,12 +123,20 @@ The companion persists its root/host/enrollment capabilities before POST pairs, 
 
 Unreleased source onboarding: invoking `pair` is explicit cloud consent. If
 `apiOrigin` is absent, select the built-in
-`https://moremote-cloud-ingress.pages.dev`; otherwise preserve and validate the
+`https://api.moremote.moxuli.com`; otherwise preserve and validate the
 configured origin. Existing target, local official discovery and daemon pin
 remain authoritative. Persist cloud-enabled configuration and the new offer
 only after the official connection succeeds, before relay creation. Retained
 pair keys, origins and revocation are never changed by a new enrollment.
 Passive config loads/check/status do not opt in, and pairing installs no service.
+
+Explicit setup, the discovery descriptor and expert `pair` share this one
+default. A saved `apiOrigin`, including the former default
+`https://moremote-cloud-ingress.pages.dev`, is never replaced on upgrade/setup.
+Retained per-pair origins, pending request/offer bytes and cloud-create bytes are
+unchanged. Both domains directly serve the same notification backend; the
+default change authorizes no redirect, old-pair migration or protocol change.
+Custom-domain DNS/TLS verification is a release prerequisite.
 
 ## Official compatibility and observation
 

@@ -14,7 +14,7 @@ existing official daemon and preserve its exact identity, then enable cloud and
 local enrollment before installing/starting the existing owned service.
 Configured custom HTTPS origin/target, existing active/revoked phones and update
 policy are preserved. An absent origin selects
-`https://moremote-cloud-ingress.pages.dev`. Source checkout without managed state
+`https://api.moremote.moxuli.com`. Source checkout without managed state
 binds its own current frontend and stays manual-update. Installed packages and
 retained managed state use capability-aware setup: if selected code predates
 enrollment, explicit setup installs/verifies the exact current version before
@@ -23,6 +23,14 @@ packages, pairs/custom origin and the independent auto-update opt-out.
 `SETUP_CURRENT_PACKAGE_UNAVAILABLE`/`SETUP_CAPABILITY_REQUIRED` are failures,
 never enabled success or an older-package fallback. Nothing patches/upgrades
 official Paseo or global tools. This capability requires CLI0.1.4 or later.
+
+The custom-domain default applies only when `apiOrigin` is absent. Every saved
+origin remains authoritative, including the former default
+`https://moremote-cloud-ingress.pages.dev`; setup, expert pairing and runtime do
+not migrate it. Existing per-phone origins, original pending offers and exact
+cloud-create bytes retain their original authority. Both domains must directly
+serve the same notification service; redirects are not a migration mechanism.
+Release the new default only after custom-domain DNS and TLS are verified.
 
 Optional schema-1 fields are `localEnrollment:{home:<absolute user home>}` and
 at most16 `enrollmentRequests`. Only explicit setup supplies that home; ordinary

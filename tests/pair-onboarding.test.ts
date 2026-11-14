@@ -11,8 +11,9 @@ import {wrapSessionMessage} from '@getpaseo/protocol/messages';
 import {loadConfig,saveConfig,type Config} from '../src/config.ts';
 import {openEnvelope,sealEnvelope} from '../src/crypto.ts';
 import {tokenHash} from '../src/pairing.ts';
+import {absentServiceManager} from './service-manager-fixture.ts';
 
-const production='https://moremote-cloud-ingress.pages.dev';
+const production='https://api.moremote.moxuli.com';
 const localCredential=Buffer.alloc(32,7).toString('base64url');
 const phoneToken=Buffer.alloc(32,8).toString('base64url');
 const claimId='22222222-2222-4222-8222-222222222222';
@@ -82,10 +83,12 @@ async function fixture(t:test.TestContext,origin=production){
  await mkdir(paseoHome);
  const pid=JSON.stringify({pid:12345,listen:'127.0.0.1:'+address.port});
  await writeFile(join(paseoHome,'paseo.pid'),pid);await writeFile(join(paseoHome,'local-credential'),localCredential);
+ const manager=await absentServiceManager(home);
+ assert.equal(new URL(manager.preload).protocol,'file:');
  const preload='data:text/javascript,'+encodeURIComponent(`const realFetch=globalThis.fetch;globalThis.fetch=(input,init)=>{const url=new URL(String(input));if(url.origin!==${JSON.stringify(origin)})throw Error('UNEXPECTED_TEST_ORIGIN');return realFetch('http://127.0.0.1:${relayAddress.port}'+url.pathname,init)};`);
  const cli=(args:string[])=>{
   const {promise,resolve,reject}=Promise.withResolvers<{code:number|null;out:string;error:string}>();
-  const child=spawn(process.execPath,['--import','tsx','--import',preload,'src/cli.ts',...args],{cwd:new URL('..',import.meta.url),env:{...process.env,HOME:home,USERPROFILE:home,LOCALAPPDATA:home,XDG_CONFIG_HOME:join(home,'config'),XDG_STATE_HOME:join(home,'statebase'),PASEO_HOME:paseoHome,PASEO_PASSWORD:'',MOREMOTE_CLI_HOME:state},stdio:['ignore','pipe','pipe'],timeout:15000,killSignal:'SIGKILL'});
+  const child=spawn(process.execPath,['--import','tsx','--import',manager.preload,'--import',preload,'src/cli.ts',...args],{cwd:new URL('..',import.meta.url),env:{...process.env,HOME:home,USERPROFILE:home,LOCALAPPDATA:home,XDG_CONFIG_HOME:join(home,'config'),XDG_STATE_HOME:join(home,'statebase'),PASEO_HOME:paseoHome,PASEO_PASSWORD:'',MOREMOTE_CLI_HOME:state},stdio:['ignore','pipe','pipe'],timeout:15000,killSignal:'SIGKILL'});
   let out='',error='';child.stdout.on('data',chunk=>out+=chunk);child.stderr.on('data',chunk=>error+=chunk);
   child.once('error',reject);child.once('close',code=>resolve({code,out,error}));
   return promise;
@@ -96,6 +99,7 @@ async function fixture(t:test.TestContext,origin=production){
   assert.equal(await readFile(join(paseoHome,'local-credential'),'utf8'),localCredential);
   assert.ok(officialRequests.every(type=>['session.events.set_subscription.request','subscription.release.request'].includes(type)));
   for(const hello of hellos)assert.deepEqual(hello.auth,auth);
+  await manager.verify();
  };
  return {home,state,paseoHome,cli,hellos,cloudRequests,verifyOfficial,target:'tcp://127.0.0.1:'+address.port+'?password=synthetic-explicit-password'};
 }
@@ -105,6 +109,7 @@ test('explicit pair discovers existing official connection and enrolls on produc
  const fresh=await loadConfig(f.state);assert.equal(fresh.cloudEnabled,false);assert.equal(fresh.apiOrigin,undefined);
  for(const args of [['check'],['status'],['check','--connect']]){
   const result=await f.cli(args);assert.equal(result.code,0,result.error);
+  if(args[0]==='status')assert.deepEqual(JSON.parse(result.out).service,{owned:false,registration:'absent'});
   assert.doesNotMatch(result.out,new RegExp(localCredential));
  }
  assert.equal(f.cloudRequests.length,0);assert.equal(f.hellos.length,1);

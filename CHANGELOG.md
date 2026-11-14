@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.1.6 — 2026-11-14
+
+- Use `https://api.moremote.moxuli.com` as the shared default for new setup, discovery and expert pairing only when no origin is configured. Preserve saved Pages/custom origins, per-phone authority and exact pending enrollment bytes; keep both domains directly available on the same notification backend. The custom domain is active with independently verified DNS, TLS and direct API routing; the old Pages origin remains available.
+- Isolate CLI and onboarding fixtures from native service managers, so an existing host registration cannot affect synthetic default-origin acceptance.
+
 ## 0.1.5 — 2026-11-14
 
 - Limit Cloudflare to notifications and their explicit reply/approval/control lifecycle. Remove activity/widget registration, discovery, dedicated provider delivery and general directory/usage publication; retain immutable uncertain-action receipts.

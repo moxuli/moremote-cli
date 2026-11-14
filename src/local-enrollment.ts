@@ -4,7 +4,7 @@ import {makeOffer,tokenHash} from './pairing.js';
 import {EnrollmentFiles,type DiscoveryOptions} from './enrollment-files.js';
 import {parseEnrollmentRequest,requestFingerprint,type EnrollmentRecord,type EnrollmentResponse} from './enrollment-protocol.js';
 
-export const DEFAULT_API_ORIGIN='https://moremote-cloud-ingress.pages.dev';
+export const DEFAULT_API_ORIGIN='https://api.moremote.moxuli.com';
 export interface LocalEnrollmentOptions {clock?:()=>number;files?:(options:DiscoveryOptions)=>EnrollmentFiles;persist?:(directory:string,config:Config)=>Promise<void>}
 export type EnrollmentCloudFactory=(pair:Pair)=>Pick<CloudClient,'create'>;
 // The runtime's existing serialized cycle owns this consumer and its Config.

@@ -8,7 +8,7 @@ import {setTimeout as sleep} from 'node:timers/promises';
 import {loadConfig,saveConfig,privateManagedDirectory} from '../src/config.ts';
 import {initialUpdateState,writeUpdateState,disableAutoUpdate,readUpdateState} from '../src/update-state.ts';
 import {setupEnrollment} from '../src/setup.ts';
-import {DEFAULT_API_ORIGIN} from '../src/local-enrollment.ts';
+import {requestFingerprint} from '../src/enrollment-protocol.ts';
 import {EnrollmentFiles} from '../src/enrollment-files.ts';
 import {activatePending,makeOffer} from '../src/pairing.ts';
 import {requestControl} from '../src/control.ts';
@@ -25,13 +25,39 @@ test('fresh explicit setup authenticates with no workspace; passive consumers ne
  const f=await enrollmentFixture(t),config=await loadConfig(f.state);delete config.apiOrigin;await saveConfig(f.state,config);
  const passive=f.consumer();await passive.cycle(config,daemon,f.cloud);await assert.rejects(readdir(f.tree),{code:'ENOENT'});
  await assert.rejects(setupEnrollment(f.state,{yes:false,home:f.home,stopOwned:async()=>{throw Error('UNEXPECTED_STOP')},authenticate:f.authenticate,install:async()=>{throw Error('UNEXPECTED_INSTALL')}}),/EXPLICIT_YES_REQUIRED/);
- const saved=await f.setup();assert.equal(saved.cloudEnabled,true);assert.equal(saved.apiOrigin,DEFAULT_API_ORIGIN);assert.deepEqual(saved.localEnrollment,{home:f.home});assert.equal(saved.daemonServerId,daemon);assert.equal(saved.pairs.length,0);
+ const saved=await f.setup();assert.equal(saved.cloudEnabled,true);assert.equal(saved.apiOrigin,'https://api.moremote.moxuli.com');assert.deepEqual(saved.localEnrollment,{home:f.home});assert.equal(saved.daemonServerId,daemon);assert.equal(saved.pairs.length,0);
  assert.equal(f.stopped,1);assert.equal(f.installed,1);assert.equal(f.cloudRequests.length,0);
  assert.ok(f.officialRequests.every(type=>['session.events.set_subscription.request','subscription.release.request'].includes(type)));
  const consumer=f.consumer();await consumer.cycle(saved,daemon,f.cloud);
  const descriptor=object(JSON.parse(await readFile(join(f.tree,'descriptor.json'),'utf8')));
- assert.deepEqual(Object.keys(descriptor).sort(),['apiOrigin','daemonServerId','enabled','expiresAt','instanceId','measuredAt','version']);assert.equal(descriptor.apiOrigin,DEFAULT_API_ORIGIN);assert.equal(descriptor.expiresAt,Number(descriptor.measuredAt)+90000);
+ assert.deepEqual(Object.keys(descriptor).sort(),['apiOrigin','daemonServerId','enabled','expiresAt','instanceId','measuredAt','version']);assert.equal(descriptor.apiOrigin,'https://api.moremote.moxuli.com');assert.equal(descriptor.expiresAt,Number(descriptor.measuredAt)+90000);
  await f.verifyOfficial();
+});
+
+test('setup and enrollment keep the original Pages authority and pending offer bytes after a default-origin change',async t=>{
+ const f=await enrollmentFixture(t),legacy='https://moremote-cloud-ingress.pages.dev',config=await loadConfig(f.state);
+ const active=makeOffer(legacy).pair,generated=makeOffer(legacy,f.now),pending=generated.pair,revoked=makeOffer('https://synthetic-retired-relay.example.test').pair;
+ active.active=true;active.daemonServerId=daemon;revoked.revokedAt=1;revoked.daemonServerId='retired-synthetic-daemon';
+ const request=f.request(),bytes=JSON.stringify(request,null,2)+'\n';
+ Object.assign(pending,{daemonServerId:daemon,automaticClientId:request.clientId,automaticRequestId:request.id});
+ const offer={...generated.offer,version:1 as const,enrollmentToken:pending.enrollmentToken!};
+ const createBytes=JSON.stringify({pairId:pending.pairId,hostTokenHash:requestFingerprint(pending.hostToken),enrollmentTokenHash:requestFingerprint(offer.enrollmentToken),expiresAt:offer.expiresAt});
+ const record={request,bytes,fingerprint:requestFingerprint(bytes),pairId:pending.pairId,offer,createBytes,created:false};
+ config.apiOrigin=legacy;config.daemonServerId=daemon;config.pairs=[active,pending,revoked];config.enrollmentRequests=[record];
+ await saveConfig(f.state,config);
+ const canonicalOffer=JSON.stringify(offer),saved=await f.setup();
+ assert.equal(saved.apiOrigin,legacy);assert.deepEqual(saved.pairs,[active,pending,revoked]);assert.deepEqual(saved.enrollmentRequests,[record]);
+ const consumer=f.consumer();let creates=0;
+ const cloud=(pair:typeof pending)=>({create:async(body:unknown)=>{
+  creates++;assert.equal(pair.apiOrigin,legacy);assert.equal(JSON.stringify(body),createBytes);
+  return {ok:true,pairId:pair.pairId,status:'pending'};
+ }});
+ await consumer.cycle(saved,daemon,cloud);await f.put(request,bytes);await consumer.cycle(saved,daemon,cloud);
+ const response=await f.response();assert.equal(creates,1);assert.equal(JSON.stringify(response.offer),canonicalOffer);
+ const retained=await loadConfig(f.state);assert.equal(retained.apiOrigin,legacy);assert.deepEqual(retained.pairs,[active,pending,revoked]);
+ assert.equal(retained.enrollmentRequests![0].bytes,bytes);assert.equal(retained.enrollmentRequests![0].createBytes,createBytes);
+ assert.equal(JSON.stringify(retained.enrollmentRequests![0].offer),canonicalOffer);
+ assert.equal(f.cloudRequests.length,0);await f.verifyOfficial();
 });
 
 test('setup reloads after stopping and preserves custom authorities, active/revoked pairs and update opt-out',async t=>{

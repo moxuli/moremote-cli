@@ -50,7 +50,7 @@ This explicit command authenticates the existing official daemon, enables cloud
 and automatic local enrollment, and installs/starts only the CLI's owned per-user
 background service. It preserves configured targets/custom HTTPS origins, active
 and revoked phones, and existing update preferences. With no origin configured,
-it selects `https://moremote-cloud-ingress.pages.dev`. It never starts, modifies
+it selects `https://api.moremote.moxuli.com`. It never starts, modifies
 or upgrades Paseo or global tools. Source-checkout setup without managed state
 binds the current source frontend and retains manual updates. Installed packages
 or retained managed state require an enrollment-capable runtime: explicit setup
@@ -58,6 +58,11 @@ can install the exact current CLI version into owned private state, preserving
 the automatic-update opt-out. A missing current package/capability fails clearly
 before enabling enrollment, never by substituting old public code. The immutable
 old package stays retained; its selected runtime/bootstrap move to capable code.
+
+Existing installations keep their configured API origin, including
+`https://moremote-cloud-ingress.pages.dev`. Retained pair origins and pending
+offers remain unchanged; both domains must serve the same notification backend
+directly, without an HTTP redirect or another pairing.
 
 Pair the computer **only in official Paseo**. A compatible MoRemote app uses
 that already authenticated connection's ordinary file channel to discover the
