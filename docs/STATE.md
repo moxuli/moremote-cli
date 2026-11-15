@@ -1,5 +1,31 @@
 # Project state
 
+## Release candidate0.1.8 — 2026-11-15
+
+The owner authorized CLI publication of the accepted title-provenance correction.
+Package/lock root versions are0.1.8, with unchanged dependencies and compatibility
+tuple. Independent follow-up closed all4initial blockers and independently passed
+11CLI tests; this is an independent-context same-provider review after the other
+provider's account hold, not a cross-provider approval. Fresh `npm ci` audits0,
+the default `npm run check` passes267/267with types/build, and actual packaged
+upgrade/failure rollback/aliased frontend/clean-stop smoke passes. Release identity
+validation passes. Hosted CI/publication and receiver acceptance are pending;
+no0.1.8public availability is claimed yet. See [[2026-11-15-title-provenance-release]].
+
+## Local title-provenance correction — unreleased
+
+The activity endpoint accepts bounded encrypted source hints and resolves current
+official workspace names through an active-only owned read subscription. A separate
+private capability file preserves the exact legacy enrollment descriptor/tree and
+rollback discovery. Targeted tests first reproduced rejected hints and missing
+capability publication, then unknown-metadata, cross-owner ordering and cache
+recovery failures. Final frozen checks pass types,267complete tests with zero
+failures/skips and compilation;24focused tests also pass. Full tests use explicit
+concurrency4 with all original timing assertions unchanged. Initial default
+concurrency258tests had2runtime-deadline failures; both pass the final complete run.
+See [[2026-11-15-live-activity-title-provenance]]. Source remains uncommitted;
+no package release, service installation or physical device acceptance is implied.
+
 ## Public0.1.7 — 2026-11-15
 
 Reviewed sourceb6756ca is public as0.1.7. All3OS CI43645424293 and release

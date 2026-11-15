@@ -1,5 +1,6 @@
 import type {DaemonClient} from '@getpaseo/client/internal/daemon-client';
 import type {AgentSnapshotPayload} from '@getpaseo/protocol/messages';
+import {LiveWorkspaces} from './live-workspaces.js';
 
 /** A separately owned read interest, acquired only for an active phone activity. */
 export class LiveDirectory {
@@ -9,10 +10,11 @@ export class LiveDirectory {
   private ready = false;
   private generation?: string;
   private head = -1;
-  constructor(private sdk: DaemonClient) {}
+  private workspaceDirectory:LiveWorkspaces;
+  constructor(private sdk: DaemonClient) {this.workspaceDirectory=new LiveWorkspaces(sdk)}
   setEnabled(enabled: boolean) {
     if (!enabled) { this.stop(); return; }
-    if (this.owner) return;
+    if (this.owner) {this.workspaceDirectory.setEnabled(true);return; }
     const owner = this.sdk.observeAgents({page:{limit:100},filter:{includeArchived:false,includeInternal:false},
       sort:[{key:'updated_at',direction:'desc'}],timeout:15000});
     this.owner = owner;
@@ -43,9 +45,13 @@ export class LiveDirectory {
       error: () => { if (this.owner === owner) this.stop(); },
     });
     void owner.ready.catch(() => { if (this.owner === owner) this.stop(); });
+    this.workspaceDirectory.setEnabled(true);
   }
   snapshot(): AgentSnapshotPayload[] | null { return this.ready ? structuredClone([...this.agents.values()]) : null; }
+  workspaces(){return this.workspaceDirectory.snapshot()}
+  requestWorkspace(id:string){this.workspaceDirectory.request(id)}
   stop() {
+    this.workspaceDirectory.stop();
     const owner = this.owner; this.owner = undefined; this.detach?.(); this.detach = undefined;
     this.agents.clear(); this.ready = false; this.generation = undefined; this.head = -1;
     void owner?.release().catch(()=>{});

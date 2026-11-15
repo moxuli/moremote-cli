@@ -50,6 +50,20 @@ over the already authenticated official file channel. Descriptor lifetime is90s,
 renewed no faster than30s; disablement can remove resources or publish disabled
 without granting a new enabled lease. This is not a cloud heartbeat.
 
+Optional activity title support is published outside that legacy tree at
+`<home>/.moremote-cli-activity/<sha256(UTF8 daemonServerId)>/capabilities.json`.
+Its exact bounded object is `{version:1,daemonServerId,instanceId,measuredAt,
+expiresAt,titleHints:1}`. It contains no title text or keys. The independent
+marked0700 directories bind to the same state directory; the0600 document uses
+the descriptor's exact instance/clock/90s expiry and30s renewal, while the existing
+enrollment runtime holds its exclusive lock. Matching-instance stop removes it;
+foreign files/markers/symlinks are never overwritten or deleted. Phones require
+a fresh matching enabled descriptor and capability before sending title hints.
+The old descriptor fields/tree stay unchanged, so an older runtime rollback
+ignores the separate tree; a retained file loses authority on instance mismatch
+or expiry. A later capable runtime can replace a valid old-instance document
+only after acquiring the normal enrollment runtime lock.
+
 After validating the original authenticated host/session/generation and fresh
 descriptor, the app durably retains one exact immutable UTF-8 request before
 official create/read-revision/write. Empty files are unfinished creates, not

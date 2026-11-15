@@ -43,3 +43,26 @@ test('one shared POST accepts notification independently; exact activity retries
  await publishEvents(pair,cloud,journal,publisher,ended,true);assert.equal(requests.length,4,'a closed generation never retries every three seconds');
  }finally{journal.close();await rm(dir,{recursive:true,force:true})}
 });
+
+test('unknown title metadata leaves the independent notification outbox live',async()=>{
+ const dir=await mkdtemp(join(tmpdir(),'moremote-title-notice-')),journal=new OperationJournal(join(dir,'journal.sqlite'));
+ try{
+  const now=Date.now(),pair={pairId:'11111111-1111-4111-8111-111111111111',rootKey:Buffer.alloc(32,7).toString('base64url'),hostToken:'synthetic',active:true};
+  const subscriptionId='22222222-2222-4222-8222-222222222222';
+  const interest=await sealEnvelope(decode(pair.rootKey,32),{version:1,pairId:pair.pairId,id:subscriptionId,channel:'activityInterest',issuedAt:now,expiresAt:now+28800000},
+   {version:2,subscriptionId,generation:'33333333-3333-4333-8333-333333333333',hostID:'host',hostLifetime:'55555555-5555-4555-8555-555555555555',daemonServerId:'daemon',displayKey:Buffer.alloc(32,9).toString('base64url'),createdAt:now,deadline:now+28800000,
+    titleHints:[{agentId:'agent',workspaceId:'workspace',source:'workspace'}]});
+  const requests:any[]=[];
+  const cloud=new CloudClient('https://example.test',pair.pairId,pair.hostToken,false,(async(_url,init)=>{
+   const body=JSON.parse(String(init?.body));requests.push(body);
+   return new Response(JSON.stringify({ok:true,attention:body.attention.map((item:any)=>({id:item.id,accepted:true}))}),{headers:{'content-type':'application/json'}});
+  }) as typeof fetch);
+  cloud.liveActivityV2=true;cloud.liveActivityInterest={registrationId:'44444444-4444-4444-8444-444444444444',interest};
+  await queueAttention(journal,pair,{agentId:'agent',kind:'finished',timestamp:now});
+  let requested=0;
+  await publishEvents(pair,cloud,journal,new LiveActivityPublisher(journal),{daemonServerId:'daemon',hostName:'host',agents:[{id:'agent',workspaceId:'workspace',title:'Raw prompt',status:'running',createdAt:new Date(now-1).toISOString(),lastUserMessageAt:null,pendingPermissions:[]}],
+   requestWorkspace:()=>{requested++}},true);
+  assert.equal(requested,1);assert.equal(requests.length,1);assert.equal(requests[0].attention.length,1);assert.equal(requests[0].activity,undefined);
+  assert.equal(journal.attention(pair.pairId,Date.now()).length,0);
+ }finally{journal.close();await rm(dir,{recursive:true,force:true})}
+});

@@ -3,10 +3,12 @@ import type { Pair } from './config.js';
 import { decode, openEnvelope, presenceTopic, validateEnvelope, type Envelope, type Metadata } from './crypto.js';
 import { canonical, type OperationJournal } from './journal.js';
 import { LIMITS, UUID, exact, object } from './limits.js';
+import {liveIdentifier as identifier,liveTitle,parseLiveTitleHints,type LiveWorkspace} from './live-activity-titles.js';
 
 export interface LiveAgent {
   id: string;
   title: string | null;
+  workspaceId?: string;
   status: string;
   createdAt: string;
   lastUserMessageAt: string | null;
@@ -19,7 +21,7 @@ export interface LiveAgent {
   labels?: Record<string, string>;
   archivedAt?: string | null;
 }
-export interface LiveSnapshot { daemonServerId: string; hostName: string; agents: LiveAgent[] }
+export interface LiveSnapshot { daemonServerId: string; hostName: string; agents: LiveAgent[];workspaces?:LiveWorkspace[];requestWorkspace?:(id:string)=>void }
 export interface LiveInterest { registrationId: string; interest: Envelope }
 interface Interest {
   version: 2;
@@ -64,7 +66,8 @@ export class LiveActivityPublisher {
       || this.journal.pairRevoked(pair.pairId) || !UUID.test(raw.registrationId)
       || raw.interest.channel !== 'activityInterest') throw Error('INVALID_LIVE_ACTIVITY_SOURCE');
     const value = object(await openEnvelope(decode(pair.rootKey, 32), raw.interest, now));
-    exact(value, ['version', 'subscriptionId', 'generation', 'hostID', 'hostLifetime', 'daemonServerId', 'displayKey', 'createdAt', 'deadline', 'hostName']);
+    exact(value, ['version', 'subscriptionId', 'generation', 'hostID', 'hostLifetime', 'daemonServerId', 'displayKey', 'createdAt', 'deadline', 'hostName', 'titleHints']);
+    const titleHints=parseLiveTitleHints(value.titleHints);
     if (value.version !== 2 || value.subscriptionId !== raw.interest.id || !UUID.test(String(value.generation))
       || !UUID.test(String(value.hostLifetime)) || !identifier(value.hostID) || !identifier(value.daemonServerId)
       || value.daemonServerId !== snapshot.daemonServerId || pair.daemonServerId && value.daemonServerId !== pair.daemonServerId
@@ -80,8 +83,15 @@ export class LiveActivityPublisher {
     const agents = snapshot.agents.filter(agent => !agent.internal && !agent.archivedAt && !agent.labels?.['paseo.parent-agent-id']?.trim());
     if (new Set(agents.map(agent => agent.id)).size !== agents.length) throw Error('DUPLICATE_LIVE_ACTIVITY_TARGET');
     if (agents.length > 100) throw Error('LIVE_ACTIVITY_CANDIDATE_LIMIT');
+    for(const hint of titleHints){
+      if(hint.source==='workspace'&&agents.some(agent=>agent.id===hint.agentId&&agent.workspaceId===hint.workspaceId)){
+        try{snapshot.requestWorkspace?.(hint.workspaceId)}catch{/* Metadata reads cannot block attention publication. */}
+      }
+    }
+    const titles=agents.map(agent=>liveTitle(agent,titleHints,snapshot.agents,snapshot.workspaces??[]));
+    if(titles.some(title=>title===undefined))return;
     const cycles: Record<string, Cycle> = {};
-    const projected = await Promise.all(agents.map(async agent => {
+    const projected = await Promise.all(agents.map(async (agent,index) => {
       if (!identifier(agent.id) || (time(agent.lastUserMessageAt) ?? 0) > now) throw Error('INVALID_LIVE_ACTIVITY_TARGET');
       const lastUserAt = time(agent.lastUserMessageAt) ?? time(agent.createdAt) ?? 0;
       const previous = old?.cycles[agent.id], turnId = agent.activeTurn?.turnId ?? null;
@@ -94,7 +104,7 @@ export class LiveActivityPublisher {
         ? tag(key, [cycle, phase, phase === 'waiting' ? canonical(agent.pendingPermissions) : agent.attentionTimestamp ?? '']) : undefined;
       return { topic, cycle, phase, lastUserAt, ...(eventId ? { eventId } : {}),
         state: { version: 1, subscriptionId: interest.subscriptionId, daemonServerId: snapshot.daemonServerId,
-          agentId: agent.id, title: bounded(agent.title || '会话', 160, 480),
+          agentId: agent.id, title: bounded(titles[index]!, 160, 480),
           hostName: bounded(interest.hostName ?? snapshot.hostName, 80, 240), phase, startedAt: null,
           requiresAttention: phase === 'waiting', isTerminal: phase === 'finished' || phase === 'error' } };
     }));
@@ -133,7 +143,6 @@ export class LiveActivityPublisher {
   }
 }
 
-function identifier(value: unknown): value is string { return typeof value === 'string' && value.length > 0 && Buffer.byteLength(value) <= 512 && !/[\s/\\\x00-\x1f]/u.test(value); }
 function time(value: string | null | undefined) { const parsed = value ? Date.parse(value) : NaN; return Number.isSafeInteger(parsed) && parsed >= 0 ? parsed : null; }
 function tag(key: Uint8Array, value: unknown[]) { return createHmac('sha256', key).update(JSON.stringify(value)).digest('base64url'); }
 function phaseFor(agent: LiveAgent, now: number): Phase {

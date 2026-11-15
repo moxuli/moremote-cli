@@ -114,3 +114,15 @@ clears the last resolved request. Unknown acknowledgements retain immutable byte
 No activity interests, WidgetKit registrations or dedicated surface APNs calls
 remain. Notification control, explicit reply/approval execution, immutable action
 journals and outcome reconciliation retain their original safeguards.
+
+## Optional activity title provenance — unreleased November 15
+
+An active phone activity separately owns bounded official agent and workspace
+read subscriptions. The phone may authorize an exact agent/workspace title source;
+the companion resolves current official text, never a cached phone title. Missing
+provenance cannot be inferred from a partial recent directory. Visible shared roots
+deny workspace projection; managed children do not count as independent roots.
+Workspace updates enter the existing semantic event fingerprint, not another
+Worker poll. Unknown workspace metadata delays only activity publication; explicit
+empty official titles fall back to agent text. Same-daemon read recovery retains
+confirmed names until new authority arrives. Disabling releases every read interest.

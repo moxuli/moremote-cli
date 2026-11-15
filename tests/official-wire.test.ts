@@ -15,6 +15,9 @@ import {queueAttention} from '../src/runtime.ts';
 
 const agent=AgentSnapshotPayloadSchema.parse({id:'synthetic-agent',provider:'claude',cwd:'/synthetic/project',model:null,createdAt:'2026-01-01T00:00:00Z',updatedAt:'2026-01-01T00:00:00Z',lastUserMessageAt:null,status:'idle',capabilities:{supportsStreaming:true,supportsSessionPersistence:true,supportsDynamicModes:false,supportsMcpServers:false,supportsReasoningStream:false,supportsToolInvocations:true},currentModeId:null,availableModes:[],pendingPermissions:[],persistence:null,title:'Synthetic task'});
 
+const workspace={id:'synthetic-workspace',projectId:'synthetic-project',projectDisplayName:'Synthetic project',
+ projectRootPath:'/synthetic/project',projectKind:'git',workspaceKind:'directory',name:'synthetic',title:'Workspace renamed',status:'running',activityAt:null};
+
 async function bounded<T>(promise:Promise<T>,milliseconds:number,code:string){
  const controller=new AbortController();
  try{return await Promise.race([promise,sleep(milliseconds,undefined,{signal:controller.signal}).then(()=>{throw Error(code)})]);}
@@ -57,6 +60,7 @@ for(const ownedSubscriptions of [false,true])test(`real SDK wire (${ownedSubscri
  let timelineEntries:FetchAgentTimelineResponseMessage['payload']['entries']=[];
  let currentAgent=agent;
  let holdAgentRead:((reply:()=>void)=>void)|undefined;
+ let holdWorkspaceRead:((reply:()=>void)=>void)|undefined;
  let agentReads=0;
  server.on('connection',socket=>{
   connections++;
@@ -65,7 +69,7 @@ for(const ownedSubscriptions of [false,true])test(`real SDK wire (${ownedSubscri
   socket.on('message',data=>{
    try{
     const frame=JSON.parse(data.toString());wire.push(frame);
-    if(frame.type==='hello')reply({type:'status',payload:{status:'server_info',serverId:'synthetic-daemon',hostname:'Synthetic host',version:'0.15.3',features:{explicitEventSubscriptions:true,ownedSubscriptions}}});
+    if(frame.type==='hello')reply({type:'status',payload:{status:'server_info',serverId:'synthetic-daemon',hostname:'Synthetic host',version:'0.15.3',features:{explicitEventSubscriptions:true,ownedSubscriptions,workspaceMultiplicity:true}}});
     else if(frame.type==='ping')socket.send(JSON.stringify({type:'pong'}));
     else if(frame.type==='session'){
      const m=frame.message;
@@ -76,6 +80,11 @@ for(const ownedSubscriptions of [false,true])test(`real SDK wire (${ownedSubscri
       const hold=holdAgentRead;holdAgentRead=undefined;if(hold)hold(send);else send();
      }
      else if(m.type==='fetch_agents_request')reply({type:'fetch_agents_response',payload:{requestId:m.requestId,...(m.subscribe&&ownedSubscriptions?{subscriptionId:'synthetic-live-agents'}:{}),entries:[{agent:currentAgent,project:{projectKey:'synthetic-project',projectName:'Synthetic project',checkout:{cwd:agent.cwd,isGit:true,currentBranch:null,remoteUrl:null,isPaseoOwnedWorktree:false}}}],pageInfo:{nextCursor:null,prevCursor:null,hasMore:false}}});
+     else if(m.type==='fetch_workspaces_request'){
+      const target=m.filter?.idPrefix,entry=target?{...workspace,id:target,title:'Exact outside first page'}:workspace;
+      const send=()=>reply({type:'fetch_workspaces_response',payload:{requestId:m.requestId,...(m.subscribe&&ownedSubscriptions?{subscriptionId:target?'synthetic-live-exact':'synthetic-live-workspaces'}:{}),entries:[entry],pageInfo:{nextCursor:null,prevCursor:null,hasMore:false}}});
+      const hold=holdWorkspaceRead;holdWorkspaceRead=undefined;if(hold)hold(send);else send();
+     }
      else if(m.type==='send_agent_message_request'){
       mutations++;lastSend=m;
       if(acknowledge)reply({type:'send_agent_message_response',payload:{requestId:m.requestId,agentId:m.agentId,accepted:true,error:null}});
@@ -107,13 +116,34 @@ for(const ownedSubscriptions of [false,true])test(`real SDK wire (${ownedSubscri
   assert.equal(official.info()?.serverId,'synthetic-daemon');assert.equal(official.info()?.hostname,'Synthetic host');assert.equal(official.requestContext().serverId,'synthetic-daemon');
   assert.equal(official.liveActivitySnapshot(),null);
   assert.equal(wire.filter(row=>row.message?.type==='fetch_agents_request').length,0,'notification-only clients acquire no live directory');
+  assert.equal(wire.filter(row=>row.message?.type==='fetch_workspaces_request').length,0,'notification-only clients acquire no workspace directory');
+  const bootstrapWorkspace=Promise.withResolvers<()=>void>();holdWorkspaceRead=bootstrapWorkspace.resolve;
   official.setLiveActivityEnabled(true);
   await official.sdk.fetchAgent({agentId:'synthetic-barrier',timeout:2000});
   assert.equal(official.liveActivitySnapshot()?.agents[0].id,agent.id);
+  assert.deepEqual(official.liveActivitySnapshot()?.workspaces,[],'workspace metadata may bootstrap after the agent directory');
+  (await bounded(bootstrapWorkspace.promise,2000,'WORKSPACE_BOOTSTRAP_NOT_OBSERVED'))();
+  await official.sdk.fetchAgent({agentId:'synthetic-barrier',timeout:2000});
+  assert.equal(official.liveActivitySnapshot()?.workspaces[0].title,'Workspace renamed');
+  for(const socket of server.clients)socket.send(JSON.stringify(wrapSessionMessage(SessionOutboundMessageSchema.parse({type:'workspace_update',payload:{kind:'upsert',workspace:{...workspace,title:'Fresh remote workspace rename'},...(ownedSubscriptions?{subscriptionId:'synthetic-live-workspaces'}:{})}}))));
+  await official.sdk.fetchAgent({agentId:'synthetic-barrier',timeout:2000});
+  assert.equal(official.liveActivitySnapshot()?.workspaces[0].title,'Fresh remote workspace rename');
+  official.liveActivitySnapshot()!.requestWorkspace('synthetic-exact-workspace');
+  await official.sdk.fetchAgent({agentId:'synthetic-barrier',timeout:2000});
+  assert.equal(official.liveActivitySnapshot()?.workspaces.find(value=>value.id==='synthetic-exact-workspace')?.title,'Exact outside first page');
+  const exactRead=wire.find(row=>row.message?.type==='fetch_workspaces_request'&&row.message.filter?.idPrefix==='synthetic-exact-workspace').message;
+  assert.equal(!!exactRead.subscribe,ownedSubscriptions,'legacy exact seeds must preserve the connection-wide broad subscription');
   for(const socket of server.clients)socket.send(JSON.stringify(wrapSessionMessage(SessionOutboundMessageSchema.parse({type:'agent_update',payload:{kind:'upsert',agent:{...agent,status:'running',activeTurn:{turnId:'live-turn',startedAt:null}},...(ownedSubscriptions?{subscriptionId:'synthetic-live-agents'}:{})}}))));
   await official.sdk.fetchAgent({agentId:'synthetic-barrier',timeout:2000});
   assert.equal(official.liveActivitySnapshot()?.agents[0].activeTurn?.turnId,'live-turn');
+  const lateWorkspace=Promise.withResolvers<()=>void>();holdWorkspaceRead=lateWorkspace.resolve;
+  official.liveActivitySnapshot()!.requestWorkspace('synthetic-late-workspace');
+  const releaseLateWorkspace=await bounded(lateWorkspace.promise,2000,'LATE_WORKSPACE_READ_NOT_OBSERVED');
   official.setLiveActivityEnabled(false);assert.equal(official.liveActivitySnapshot(),null);
+  releaseLateWorkspace();
+  for(const socket of server.clients)socket.send(JSON.stringify(wrapSessionMessage(SessionOutboundMessageSchema.parse({type:'workspace_update',payload:{kind:'upsert',workspace:{...workspace,title:'Late after release'},...(ownedSubscriptions?{subscriptionId:'synthetic-live-workspaces'}:{})}}))));
+  await official.sdk.fetchAgent({agentId:'synthetic-barrier',timeout:2000});
+  assert.equal(official.liveActivitySnapshot(),null,'late workspace updates cannot restore a stopped interest');
   const observed:Attention[]=[],publications:Promise<void>[]=[];
   const noticeNow=Date.now(),base=noticeNow-10000;
   const stopAttention=official.onAttention(event=>{observed.push(event);publications.push(queueAttention(journal,pair,event,noticeNow));});

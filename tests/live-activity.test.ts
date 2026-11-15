@@ -16,12 +16,12 @@ const generation = '33333333-3333-4333-8333-333333333333';
 const registrationId = '44444444-4444-4444-8444-444444444444';
 const agent: LiveAgent = { id: 'synthetic-agent', title: '登录修复', status: 'running', pendingPermissions: [],
   createdAt: new Date(100).toISOString(), lastUserMessageAt: new Date(1000).toISOString(), activeTurn: { turnId: 'turn-one', startedAt: new Date(1000).toISOString() } };
-async function interest(now = 1000) {
+async function interest(now = 1000, titleHints?: unknown) {
   return { registrationId, interest: await sealEnvelope(decode(pair.rootKey, 32), { version: 1, pairId: pair.pairId,
     id: subscriptionId, channel: 'activityInterest', issuedAt: now, expiresAt: now + 28_800_000 },
   { version: 2, subscriptionId, generation, hostID: 'saved-host', hostLifetime: '55555555-5555-4555-8555-555555555555',
     daemonServerId: pair.daemonServerId, displayKey: key.toString('base64url'), createdAt: now, deadline: now + 28_800_000,
-    hostName: '工作站' }) };
+    hostName: '工作站', ...(titleHints === undefined ? {} : { titleHints }) }) };
 }
 async function openDisplay(envelope: any) {
   const k = await webcrypto.subtle.importKey('raw', key, 'AES-GCM', false, ['decrypt']);
@@ -96,5 +96,62 @@ test('phone creation clocks use the same bounded skew tolerance as the authentic
   const value=await publisher.prepare(pair,await interest(2100),{daemonServerId:pair.daemonServerId,hostName:'machine',agents:[agent]},1100);
   assert.ok(value);
   await assert.rejects(publisher.prepare(pair,await interest(122000),{daemonServerId:pair.daemonServerId,hostName:'machine',agents:[agent]},1100));
+ });
+});
+
+test('exact phone title provenance resolves fresh official names without freezing or guessing workspace ownership', async () => {
+ await fixture(async publisher => {
+  const hints = [{agentId:agent.id,workspaceId:'workspace-one',source:'workspace'}];
+  const info = await interest(1000,hints);
+  const snapshot = {daemonServerId:pair.daemonServerId,hostName:'machine',agents:[{...agent,workspaceId:'workspace-one'}],
+   workspaces:[{id:'workspace-one',title:'Renamed workspace'}]};
+  const first = await publisher.prepare(pair,info,snapshot,1100);assert.ok(first);
+  assert.equal((await openDisplay(first.candidates[0].payload)).state.title,'Renamed workspace');
+  publisher.acknowledge(pair.pairId,registrationId,first.sequence);
+  const changed = await publisher.prepare(pair,info,{...snapshot,workspaces:[{id:'workspace-one',title:'New remote name'}]},1200);assert.ok(changed);
+  assert.equal((await openDisplay(changed.candidates[0].payload)).state.title,'New remote name');
+  publisher.acknowledge(pair.pairId,registrationId,changed.sequence);
+  assert.equal(await publisher.prepare(pair,info,{...snapshot,workspaces:[{id:'workspace-one',title:'New remote name'}]},1300),undefined);
+  for (const [caseHints,agents] of [
+   [undefined,snapshot.agents],
+   [[{...hints[0],source:'conversation'}],[{...snapshot.agents[0],title:'Fresh provider rename'}]],
+   [[{...hints[0],workspaceId:'another-workspace'}],snapshot.agents],
+   [hints,[...snapshot.agents,{...snapshot.agents[0],id:'sibling',archivedAt:'2026-01-01'}]],
+  ] as const) {
+   await fixture(async isolated => {
+    const value = await isolated.prepare(pair,await interest(1000,caseHints),{...snapshot,agents:[...agents]},1400);assert.ok(value);
+    const candidate = value.candidates.find(row=>row.topic===first.candidates[0].topic)!;
+    assert.equal((await openDisplay(candidate.payload)).state.title,agents[0].title);
+   });
+  }
+ });
+});
+
+test('title hints reject unknown fields, duplicates, invalid sources and count/UTF-8 overflow before publication', async () => {
+ await fixture(async publisher => {
+  const hint={agentId:agent.id,workspaceId:'workspace-one',source:'workspace'};
+  const invalid:unknown[]=[null,{},[{...hint,title:'never accept cached text'}],[{...hint,source:'guess'}],[{...hint,source:['workspace']}],[hint,hint],
+   [{...hint,agentId:''}],[{...hint,workspaceId:'bad/id'}],Array.from({length:33},(_,i)=>({...hint,agentId:'agent-'+i})),
+   Array.from({length:16},(_,i)=>({...hint,agentId:'agent-'+i,workspaceId:'名'.repeat(100)}))];
+  for(const titleHints of invalid) await assert.rejects(publisher.prepare(pair,await interest(1000,titleHints),
+   {daemonServerId:pair.daemonServerId,hostName:'machine',agents:[agent]},1100));
+ });
+});
+
+test('unknown workspace metadata waits without publishing the raw prompt or replacing exact unknown retries',async()=>{
+ await fixture(async publisher=>{
+  const info=await interest(1000,[{agentId:agent.id,workspaceId:'workspace-one',source:'workspace'}]);
+  const requested:string[]=[];
+  const snapshot={daemonServerId:pair.daemonServerId,hostName:'machine',agents:[{...agent,workspaceId:'workspace-one'}],
+   workspaces:[],requestWorkspace:(id:string)=>{requested.push(id)}};
+  assert.equal(await publisher.prepare(pair,info,snapshot,1100),undefined);
+  assert.deepEqual(requested,['workspace-one']);
+  const first=await publisher.prepare(pair,info,{...snapshot,workspaces:[{id:'workspace-one',title:'Confirmed name'}]},1200);assert.ok(first);
+  assert.equal((await openDisplay(first.candidates[0].payload)).state.title,'Confirmed name');
+  assert.deepEqual(await publisher.prepare(pair,info,snapshot,1300),first,'unacknowledged bytes remain immutable');
+  publisher.acknowledge(pair.pairId,registrationId,first.sequence);
+  assert.equal(await publisher.prepare(pair,info,snapshot,1400),undefined,'missing metadata never means a clear');
+  const cleared=await publisher.prepare(pair,info,{...snapshot,workspaces:[{id:'workspace-one',title:null}]},1500);assert.ok(cleared);
+  assert.equal((await openDisplay(cleared.candidates[0].payload)).state.title,agent.title);
  });
 });

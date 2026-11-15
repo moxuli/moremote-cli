@@ -63,7 +63,7 @@ export class OfficialClient implements OfficialOperations{
  });
  this.subscription=this.sdk.observeEvents(['agent_attention_required','agent_permission_request','agent_permission_resolved','status.server_info'],{notifications:false});await this.subscription.ready;}
  setLiveActivityEnabled(enabled:boolean){this.liveDirectory.setEnabled(enabled)}
- liveActivitySnapshot(){const agents=this.liveDirectory.snapshot();return agents?{daemonServerId:this.serverId,hostName:this.info()?.hostname||hostname(),agents}:null}
+ liveActivitySnapshot(){const agents=this.liveDirectory.snapshot();return agents?{daemonServerId:this.serverId,hostName:this.info()?.hostname||hostname(),agents,workspaces:this.liveDirectory.workspaces(),requestWorkspace:(id:string)=>this.liveDirectory.requestWorkspace(id)}:null}
  info():ServerInfoStatusPayload|null{return this.sdk.getLastServerInfoMessage()}
  private emit(event:Attention){if(Number.isSafeInteger(event.timestamp)&&event.timestamp>=0)for(const cb of this.callbacks)cb(event)}
  private emitRequest(agentId:string,request:AgentSnapshotPayload['pendingPermissions'][number]){

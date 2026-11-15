@@ -5,6 +5,7 @@ import {createPrivateFile,hasCode,inspectResource,readPrivateText,removeOwnedRes
 import {object,exact,UUID} from './limits.js';
 import {DISCOVERY_NAME,descriptorLifetime,descriptorRenewal,type EnrollmentDescriptor,type EnrollmentRecord,type EnrollmentResponse} from './enrollment-protocol.js';
 import {validateOrigin} from './config.js';
+import {ActivityCapabilityFiles} from './activity-capabilities.js';
 
 const marker='.moremote-cli-owner';
 const rootMarker='MoRemote CLI discovery v1\n';
@@ -40,8 +41,10 @@ export class EnrollmentFiles {
  private measuredAt=-Infinity;
  private enabled:boolean|undefined;
  private readonly hostMarker:string;
+ private readonly activityCapabilities:ActivityCapabilityFiles;
  constructor(private options:DiscoveryOptions){
   this.instanceId=options.instanceId??randomUUID();this.path=discoveryDirectory(options.home,options.daemonServerId);
+  this.activityCapabilities=new ActivityCapabilityFiles(options.home,options.stateDirectory,options.daemonServerId,this.instanceId);
   this.hostMarker=JSON.stringify({owner:'MoRemote CLI discovery host',version:1,daemonServerId:options.daemonServerId,stateDirectory:resolve(options.stateDirectory)})+'\n';
  }
  open(records:EnrollmentRecord[]=[]){
@@ -92,7 +95,7 @@ export class EnrollmentFiles {
   const path=join(this.path,'descriptor.json');
   if(inspectResource(path,'file',true))validateDescriptor(path,this.options.daemonServerId);
   const descriptor:EnrollmentDescriptor={version:1,daemonServerId:this.options.daemonServerId,instanceId:this.instanceId,apiOrigin,enabled,measuredAt:now,expiresAt:now+descriptorLifetime};
-  atomic(path,descriptor,4096);this.measuredAt=now;this.enabled=enabled;
+  atomic(path,descriptor,4096);this.activityCapabilities.publish(now);this.measuredAt=now;this.enabled=enabled;
  }
  requestNames(){this.assertOwner();return readdirSync(join(this.path,'requests')).filter(name=>name!==marker).sort()}
  readRequest(name:string){
@@ -116,8 +119,9 @@ export class EnrollmentFiles {
  close(records:EnrollmentRecord[]=[]){
   if(!this.lock)return;this.assertOwner();
   try{
+   this.activityCapabilities.close();
    for(const record of records)this.removeResponse(record);
    const descriptor=join(this.path,'descriptor.json');if(inspectResource(descriptor,'file',true)){validateDescriptor(descriptor,this.options.daemonServerId);const file=readPrivateText(descriptor,4096);if(object(JSON.parse(file.text)).instanceId===this.instanceId)removeOwnedResource(descriptor,file.identity)}
-  }finally{if(!removeOwnedResource(join(this.path,'runtime.lock'),this.lock))throw Error('DISCOVERY_RESOURCE_CHANGED');this.lock=undefined}
+  }finally{if(!removeOwnedResource(join(this.path,'runtime.lock'),this.lock))throw Error('DISCOVERY_RESOURCE_CHANGED');this.lock=undefined;this.measuredAt=-Infinity;this.enabled=undefined}
  }
 }

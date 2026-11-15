@@ -113,6 +113,22 @@ activity/widget provider registration or discovery command remains.
 
 ## Service resources
 
+Activity title support has no new config toggle. While existing local enrollment
+owns its daemon lock, it publishes a nonsecret private file at
+`<home>/.moremote-cli-activity/<sha256(UTF8 daemonServerId)>/capabilities.json`.
+The exact version1 capability contains daemon/instance identity, the current
+descriptor's measuredAt/expiresAt and `titleHints:1`; it renews with that90s/30s
+descriptor lease and is removed only by the matching instance. This independent
+marked0700/0600 tree leaves legacy discovery and rollback layouts unchanged.
+Only an active activity acquires the additional bounded100-workspace official
+read subscription. Targets omitted from that page acquire at most32 exact owned
+reads, with exact-ID checks on prefix-query responses. Legacy hosts use one-time
+non-subscribing seeds and retain the broad stream, preserving their connection-wide
+subscription slot. Recovery metadata shares a132-row cap; every stop releases
+owners and fences late responses. Phone source hints are at most32 entries and
+4000 UTF-8 JSON bytes, contain IDs/source only, and do not change config, authority
+or cloud cadence. Unknown metadata delays activity only; notifications keep flowing.
+
 macOS: user Library/LaunchAgents/com.moremote.cli.plist. Linux: XDG_CONFIG_HOME/systemd/user/moremote-cli.service (fallback user .config). Windows: current-user task MoRemoteCLI and UTF-16 XML in CLI state, InteractiveToken/LeastPrivilege; built-in PowerShell checks exact existing task ownership before schtasks mutation. Marker binds the data-directory hash; manager registration/file ownership mismatch fails closed. A private CLI root marker refuses nonempty foreign directories and gates purge. No official Paseo service/resource is altered. Missing managers fail honestly.
 
 ## Update source

@@ -173,6 +173,11 @@ claim a local resolve API erases a notification already displayed by iOS.
 
 ## Required regression cases
 
+Activity title-source hints are presentation-only: they cannot select a command
+target, approve a request, clear attention or change any operation/receipt identity.
+Resolving a rename preserves all exact unknown-publication bytes and existing
+dispatch, revocation and expiry checks.
+
 - Lost/withheld revoke reaches cloud but not companion: no endpoint-confirmed UI.
 - Revoke/cancel persisted locally survives restart and blocks later dispatch;
   already-dispatched cancellation is tooLate, not falsely cancelled.

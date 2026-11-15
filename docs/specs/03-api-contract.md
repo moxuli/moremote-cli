@@ -451,3 +451,10 @@ for routine updates/10for attention or end, ordered epoch-second timestamps,
 stale-date and immediate end dismissal. Apple4KiB limits are checked after final
 serialization. Registration, exact retries, revocation and end never authorize
 commands. Legacy activity/widget routes remain410. No push-to-start is implemented.
+
+Optional title provenance changes only encrypted endpoint plaintext, not any
+HTTP request/response shape or routing authority. Capable companions accept
+the bounded `titleHints` extension specified in02; phones send it only after
+matching a fresh official-file capability to the current enrollment descriptor.
+Older companions receive the unchanged interest shape. No cloud capability
+probe, title plaintext, additional event route or Worker poll is introduced.

@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.1.8 — 2026-11-15
+
+- Resolve encrypted Live Activity titles from exact phone-provided source hints and current official workspace metadata. Keep imported/shared-root conversations on their own fresh agent titles; unknown publication retries retain their original bytes.
+- Keep unready or recovering workspace metadata distinct from an explicit cleared title. Preserve notification delivery, bound exact target reads, fence cross-subscription ordering and retain the legacy broad subscription slot.
+- Advertise bounded title-hint support in a separate private activity capability file, tied to the existing enrollment descriptor instance and expiry. Preserve the strict legacy descriptor and managed rollback discovery layout.
+- Validate the frozen correction with267complete tests,24focused regressions, typecheck and build. Preserve existing runtime deadlines and use explicit test concurrency4; retain initial failed-check evidence in the local acceptance journal.
+
 ## 0.1.7 — 2026-11-15
 
 - Pin ws8.21.0 to include upstream memory-exhaustion and uninitialized-close-memory fixes; retain Node24.13.0 and the exact official Paseo SDK versions.

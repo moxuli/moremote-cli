@@ -211,6 +211,25 @@ localized fallback; an authenticated legacy route may use cached local labels.
 
 ## Required evidence
 
+An optional v2 `activityInterest` plaintext may contain `titleHints`, at most32
+exact `{agentId,workspaceId,source:"conversation"|"workspace"}` objects whose full
+UTF-8 JSON array is at most4000bytes. IDs are nonempty, at most512 UTF-8 bytes,
+and exclude whitespace, slashes, backslashes and control characters. Duplicate
+agent IDs, unknown fields, cached title text and other source values reject.
+Existing host/daemon/lifetime and encrypted interest expiry bind every hint.
+Only a matching workspace hint permits current official workspace text; conversation,
+missing/mismatched hints or visible multiple roots retain current agent text.
+The relay sees only the existing opaque envelope. Unknown publications keep
+their exact original ciphertext, even if names or hints change before acknowledgement.
+Missing workspace metadata is unknown, not an empty title: optional activity
+publication waits without delaying notifications. A full official workspace entry
+with a missing/null/blank title permits agent fallback; a removal is unknown.
+Read failures and bounded-page omissions retain
+confirmed metadata. One workspace shares generation/sequence ordering across
+subscriptions; older same-generation snapshots cannot replace newer updates.
+Without sequence evidence, an active exact owned read outranks a broad read;
+legacy exact seeds cannot overwrite stream changes observed during their request.
+
 Cross-runtime vectors cover exact encryption/decryption and authenticated metadata;
 wrong keys, modified routing, expired envelopes and unsupported versions fail.
 State-machine tests cover conflicting reuse, restart at each execution boundary,
