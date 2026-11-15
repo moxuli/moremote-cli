@@ -73,7 +73,41 @@ smoke. The focused real enrollment consumer passes1/1. A separate temporary
 failure probe disables its synthetic claim and deliberately uses a1500msprobe
 admission deadline; it retains the failure and exits with owned-child/server
 teardown in2.685s. That probe does not alter the repository's15s/20sassertions.
-Final hosted platform checks/publication/receiver acceptance remain pending.
+Final hosted and receiver results follow below.
+
+## Public release and independent receiver acceptance
+
+Source `d545c23a9dfcbd6c9b1983a907488d61cbcad785` is the immutablev0.1.8tag.
+CI43718667202 succeeds on Ubuntu24.04, macOS15 and Windows2025, including actual
+packaged upgrade/rollback. POSIX suites pass279/279with zero skips; Windows
+passes246and explicitly skips33platform-specific cases, with zero failures.
+Release43719303096 repeats the complete Linux check/upgrade smoke and produces
+byte-deterministic validated archives before accepting npm publication and
+creating the public GitHub Release. No initial failed candidate was tagged.
+
+The first anonymous npm exact-version read remained404while npm explicitly
+reported background processing; acceptance waited without republishing. At
+2026-11-15T13:39Z the anonymous registry exposes0.1.8and latest0.1.8. An exact
+public install uses empty user/global npm configuration, no npm authentication
+environment and temporary HOME/prefix/cache; the real frontend prints0.1.8.
+All106installed package files match the public archive. No native service or
+real provider session is installed, restarted or upgraded by this acceptance.
+
+Anonymous npm and GitHub downloads equal the original tested local archive and
+the GitHub SHA256SUMS attachment. The170832-byte archive SHA256 is:
+
+`2ce3f482208d8f5b8d8cbe3a34cacead401ec278d2f4b6e11ec4b0de81f66179`.
+
+The npm integrity/SHA1 values also match independently calculated archive hashes.
+GitHub's anonymous API was rate-limited; existing authenticated CLI readback
+confirms non-draft/non-prerelease metadata, while asset downloads remain anonymous.
+No credential/account configuration was changed. Public release:
+[v0.1.8](https://github.com/moxuli/moremote-cli/releases/tag/v0.1.8).
+
+Local acceptance evidence retains public metadata, final job logs, anonymous
+installation output, archive bytes/checksums, reviewed source hashes, the exact
+initial failed candidate and all stated RED/GREEN/review records. Publication is
+complete;0.1.8must never be republished or retagged to include later documentation.
 
 ## Publication boundary
 

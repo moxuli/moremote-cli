@@ -1,21 +1,23 @@
 # Project state
 
-## Release candidate0.1.8 — 2026-11-15
+## Public0.1.8 — 2026-11-15
 
-The owner authorized CLI publication of the accepted title-provenance correction.
-Package/lock root versions are0.1.8, with unchanged dependencies and compatibility
-tuple. Independent follow-up closed all4initial blockers and independently passed
-11CLI tests; this is an independent-context same-provider review after the other
-provider's account hold, not a cross-provider approval. The first hosted candidate
-exposed a private-pathname retirement race before tagging; the final read-only
-correction and observed-mutation fence have two independent security-context
-approvals and36/36resource tests. Fresh `npm ci` audits0; final default check passes
-279/279with types/build, and actual packaged upgrade/failure rollback/aliased
-frontend/clean-stop smoke passes. Original test deadlines are unchanged. Release
-identity validation passes. Final hosted CI/publication and receiver acceptance are pending;
-no0.1.8public availability is claimed yet. See [[2026-11-15-title-provenance-release]].
+Reviewed sourced545c23 is public as0.1.8. All3OS CI43718667202 and release
+43719303096 pass, including actual packaged upgrade/rollback. POSIX checks pass
+279/279; Windows passes246with33explicit platform skips and zero failures.
+Final resource security regressions pass36/36with two independent same-provider
+security contexts; unavailable cross-provider review is not claimed as approval.
 
-## Local title-provenance correction — unreleased
+Anonymous registry read reports latest0.1.8; an exact-version install with empty
+npm credential configuration and isolated HOME prints0.1.8. Its106package files
+equal the archive bytes. Local tested/npm/GitHub tarballs and SHA256SUMS match:
+`2ce3f482208d8f5b8d8cbe3a34cacead401ec278d2f4b6e11ec4b0de81f66179`.
+The public archive is170832bytes. Initial failed CI/RED evidence and npm processing
+delay are preserved in [[2026-11-15-title-provenance-release]]. Dependencies and
+compatibility tuple remain unchanged. No everyday service or real provider
+session was modified by release/receiver acceptance. Do not republish or retag0.1.8.
+
+## Earlier local title-provenance checkpoint — before0.1.8
 
 The activity endpoint accepts bounded encrypted source hints and resolves current
 official workspace names through an active-only owned read subscription. A separate
