@@ -182,11 +182,26 @@ test('real runtime serial cycle enrolls before any workspace and cleans private 
  const preload='data:text/javascript,'+encodeURIComponent(`const realFetch=globalThis.fetch;globalThis.fetch=(input,init)=>{const url=new URL(String(input));if(url.origin!==${JSON.stringify(origin)})throw Error('UNEXPECTED_TEST_ORIGIN');return realFetch('http://127.0.0.1:${f.relayPort}'+url.pathname,init)};`);
  const child=spawn(process.execPath,['--import','tsx','--import',preload,'src/cli.ts','run','--data-dir',f.state],{cwd:new URL('..',import.meta.url),env:{...process.env,HOME:f.home,USERPROFILE:f.home,PASEO_HOME:f.paseoHome,MOREMOTE_CLI_HOME:f.state,PASEO_PASSWORD:''},stdio:['ignore','pipe','pipe']});
  let output='',error='';child.stdout.on('data',chunk=>{output+=chunk});child.stderr.on('data',chunk=>{error+=chunk});const exited=once(child,'exit');
- t.after(()=>{if(child.exitCode===null)child.kill('SIGKILL')});
+ const terminate=()=>{if(child.exitCode===null&&child.signalCode===null)child.kill('SIGKILL')};
+ t.signal.addEventListener('abort',terminate,{once:true});t.after(terminate);
+ try{
  const deadline=Date.now()+15000;let active=false;
  while(Date.now()<deadline&&child.exitCode===null){active=(await loadConfig(f.state)).pairs[0]?.active===true;if(active)break;await sleep(25)}
- assert.equal(active,true,error);await requestControl(f.state,'stop');const [code]=await exited;assert.equal(code,0,error);
+ let diagnostic='';
+ if(!active){
+  const stages=new Set(['starting','connecting','cloud-enabled','local-only','degraded']);
+  const codes=new Set(['CLI_CYCLE_FAILED','CLI_COMMAND_FAILED','FOREIGN_RESOURCE_LINKS','FOREIGN_RESOURCE_CHANGED','FOREIGN_RESOURCE_KIND','FOREIGN_RESOURCE_MODE','FOREIGN_RESOURCE_USER','ENROLLMENT_DAEMON_MISMATCH','CLI_ALREADY_RUNNING']);
+  let stage='unavailable',lastError='unavailable';
+  try{const status=await requestControl(f.state,'status');if(stages.has(String(status?.stage)))stage=String(status!.stage);if(codes.has(String(status?.lastError)))lastError=String(status!.lastError)}catch{}
+  diagnostic=JSON.stringify({stage,lastError,hellos:f.hellos.length,officialRequests:f.officialRequests.length,cloudRequests:f.cloudRequests.length,creates:f.creates.size,childExited:child.exitCode!==null||child.signalCode!==null,stderrCodes:error.split(/\r?\n/u).filter(line=>codes.has(line))});
+ }
+ assert.equal(active,true,diagnostic);await requestControl(f.state,'stop');const [code]=await exited;assert.equal(code,0,'OWNED_TEST_CHILD_EXIT_FAILED');
  const saved=await loadConfig(f.state);assert.equal(saved.pairs.length,1);assert.equal(saved.pairs[0].active,true);assert.equal(f.creates.size,1);
  await assert.rejects(f.response(),{code:'ENOENT'});assert.doesNotMatch(output,/rootKey|enrollmentToken|hostToken/);assert.doesNotMatch(error,/rootKey|enrollmentToken|hostToken/);await f.verifyOfficial();
  assert.ok(f.officialRequests.every(type=>['session.events.set_subscription.request','subscription.release.request','fetch_agents_request'].includes(type)));
+ }finally{
+  terminate();const timeout=new AbortController();
+  try{await Promise.race([exited.catch(()=>{throw Error('OWNED_TEST_CHILD_FAILED')}),sleep(2000,undefined,{signal:timeout.signal}).then(()=>{throw Error('OWNED_TEST_CHILD_EXIT_TIMEOUT')})])}
+  finally{timeout.abort();t.signal.removeEventListener('abort',terminate)}
+ }
 });

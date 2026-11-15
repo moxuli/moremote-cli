@@ -5,7 +5,8 @@
 - Resolve encrypted Live Activity titles from exact phone-provided source hints and current official workspace metadata. Keep imported/shared-root conversations on their own fresh agent titles; unknown publication retries retain their original bytes.
 - Keep unready or recovering workspace metadata distinct from an explicit cleared title. Preserve notification delivery, bound exact target reads, fence cross-subscription ordering and retain the legacy broad subscription slot.
 - Advertise bounded title-hint support in a separate private activity capability file, tied to the existing enrollment descriptor instance and expiry. Preserve the strict legacy descriptor and managed rollback discovery layout.
-- Validate the frozen correction with267complete tests,24focused regressions, typecheck and build. Preserve existing runtime deadlines and use explicit test concurrency4; retain initial failed-check evidence in the local acceptance journal.
+- Reopen private text reads when POSIX pathname lookup reports an inode retired by atomic replacement. Require a different, strictly owned replacement within the existing bounded read; preserve hardlink, symlink, mode, mutation and write-path refusal.
+- Validate the final candidate with279complete tests,36resource regressions,24focused title regressions, typecheck/build and actual packaged upgrade/rollback. Preserve existing runtime deadlines and retain initial failed-check evidence in the local acceptance journal.
 
 ## 0.1.7 — 2026-11-15
 

@@ -6,10 +6,13 @@ The owner authorized CLI publication of the accepted title-provenance correction
 Package/lock root versions are0.1.8, with unchanged dependencies and compatibility
 tuple. Independent follow-up closed all4initial blockers and independently passed
 11CLI tests; this is an independent-context same-provider review after the other
-provider's account hold, not a cross-provider approval. Fresh `npm ci` audits0,
-the default `npm run check` passes267/267with types/build, and actual packaged
-upgrade/failure rollback/aliased frontend/clean-stop smoke passes. Release identity
-validation passes. Hosted CI/publication and receiver acceptance are pending;
+provider's account hold, not a cross-provider approval. The first hosted candidate
+exposed a private-pathname retirement race before tagging; the final read-only
+correction and observed-mutation fence have two independent security-context
+approvals and36/36resource tests. Fresh `npm ci` audits0; final default check passes
+279/279with types/build, and actual packaged upgrade/failure rollback/aliased
+frontend/clean-stop smoke passes. Original test deadlines are unchanged. Release
+identity validation passes. Final hosted CI/publication and receiver acceptance are pending;
 no0.1.8public availability is claimed yet. See [[2026-11-15-title-provenance-release]].
 
 ## Local title-provenance correction — unreleased

@@ -34,9 +34,19 @@ export function inspectResource(path:string,kind:'file'|'directory'|'socket',opt
  assertResource(stat,kind,privateMode);
  return stat;
 }
+function inspectReadPath(path:string,privateMode:boolean,opened?:Stats):Stats|null {
+ const observed=lstatSync(path);assertResource(observed,'file',privateMode,true);
+ if(opened&&sameResource(opened,observed)&&(opened.size!==observed.size||opened.mtimeMs!==observed.mtimeMs))throw Error('FOREIGN_RESOURCE_CHANGED');
+ if(observed.nlink!==0)return observed;
+ // POSIX pathname lookup can retain the old inode while rename retires it.
+ // Only a different, strictly validated owned replacement permits reopening.
+ const replacement=inspectResource(path,'file',false,privateMode);
+ if(!replacement||sameResource(observed,replacement))throw Error('FOREIGN_RESOURCE_CHANGED');
+ return null;
+}
 export function readPrivateText(path:string,limit:number,encoding:'utf8'|'utf16le'='utf8',privateMode=true) {
  for(let attempt=0;attempt<3;attempt++) {
-  const before=inspectResource(path,'file',false,privateMode);
+  const before=inspectReadPath(path,privateMode);if(!before)continue;
   const fd=openSync(path,constants.O_RDONLY|constants.O_NOFOLLOW|constants.O_NONBLOCK);
   try {
    const opened=fstatSync(fd);assertResource(opened,'file',privateMode,true);
@@ -56,7 +66,7 @@ export function readPrivateText(path:string,limit:number,encoding:'utf8'|'utf16l
    // Content changes already observed on this handle remain failures even if a
    // later atomic replacement would otherwise permit reopening the pathname.
    if(opened.size!==size||opened.size!==finished.size||opened.mtimeMs!==finished.mtimeMs)throw Error('FOREIGN_RESOURCE_CHANGED');
-   const after=inspectResource(path,'file',false,privateMode);
+   const after=inspectReadPath(path,privateMode,opened);if(!after)continue;
    // Only an ordinary owned replacement permits another read. Linked, foreign
    // or insecure paths fail inspection, and in-place mutation is never retried.
    if(after&&!sameResource(opened,after))continue;

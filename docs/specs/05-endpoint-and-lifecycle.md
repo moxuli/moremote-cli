@@ -128,6 +128,11 @@ Config/resource readers and atomic writers use the same524288-byte serialized
 bound, preserving full original request bytes. Oversize writes reject before
 replacement. Only acquired runtime ownership initializes fresh config; duplicate
 `run` never writes an old loaded config over live enrollment.
+Private reads retain their3-attempt bound when a POSIX pathname lookup itself
+returns an inode retired by rename. Reopening requires a different strictly
+owned regular replacement; no retired bytes may be returned. Hardlinks, symlinks,
+foreign owners/modes and observed in-place mutation still reject, and mutation
+operations do not gain this read-only retry permission.
 
 ## Expert-only manual enrollment offer v1
 

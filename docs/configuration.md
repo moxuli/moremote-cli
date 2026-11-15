@@ -47,6 +47,11 @@ bound, including the serialized trailing newline. This accommodates16 maximum
 serialization. Oversize writes fail before replacing any config. Fresh `run`
 initializes config only after acquiring runtime ownership; duplicate `run`
 refuses without rewriting a live enrollment snapshot.
+Private text reads allow at most3attempts across atomic replacements. A POSIX
+pathname lookup returning a retired inode with link count0 permits reopening
+only after a different ordinary owned replacement passes strict validation.
+No retired handle bytes are returned; linked/foreign/insecure resources and
+observed in-place mutation remain failures. Mutation-path ownership is unchanged.
 
 The private tree is `<home>/.moremote-cli-connect/<sha256(UTF8 daemonServerId)>/`;
 its parent/host/request/response directories have owned markers and POSIX0700.

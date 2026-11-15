@@ -48,6 +48,63 @@ for(const boundary of ['lstat','open','read','final-lstat'] as const)test('priva
  const result=readPrivateText(f.path,4096);assert.deepEqual(JSON.parse(result.text),replacement);assert.equal(sameResource(result.identity,fs.lstatSync(f.path)),true);
 });
 
+for(const boundary of ['initial','final'] as const)test('private read reopens a pathname lookup retired before '+boundary+' stat returns',{skip:process.platform==='win32'},async t=>{
+ const f=await fixture(t),replacement={...f.config,clientId:'moremote-cli-retired-lookup'};
+ await writeFile(f.next,JSON.stringify(replacement),{mode:0o600});
+ const held=fs.openSync(f.path,fs.constants.O_RDONLY),lstat=fs.lstatSync;let inspections=0,retired=false;
+ const mocked=t.mock.method(fs,'lstatSync',(...args:Parameters<typeof fs.lstatSync>)=>{
+  const result=lstat(...args);
+  if(args[0]===f.path&&++inspections===(boundary==='initial'?1:2)){
+   fs.renameSync(f.next,f.path);const observed=fs.fstatSync(held);
+   assert.equal(observed.nlink,0,'the actual replaced inode must be retired');retired=true;return observed;
+  }
+  return result;
+ });
+ syncBuiltinESMExports();
+ try{
+  const result=readPrivateText(f.path,4096);assert.deepEqual(JSON.parse(result.text),replacement);
+  assert.equal(sameResource(result.identity,lstat(f.path)),true);assert.equal(retired,true);
+ }finally{mocked.mock.restore();syncBuiltinESMExports();fs.closeSync(held)}
+});
+
+for(const boundary of ['initial','final'] as const)for(const foreign of ['symlink','hardlink','mode','oversize'] as const)test('retired '+boundary+' lookup cannot launder a '+foreign+' replacement',{skip:process.platform==='win32'},async t=>{
+ const f=await fixture(t),target=join(f.dir,'foreign.json');await writeFile(target,JSON.stringify(f.config),{mode:0o600});
+ if(foreign==='symlink')fs.symlinkSync(target,f.next);
+ else if(foreign==='hardlink')fs.linkSync(target,f.next);
+ else await writeFile(f.next,foreign==='oversize'?'x'.repeat(4097):JSON.stringify(f.config),{mode:foreign==='mode'?0o644:0o600});
+ const held=fs.openSync(f.path,fs.constants.O_RDONLY),lstat=fs.lstatSync;let inspections=0,retired=false;
+ const mocked=t.mock.method(fs,'lstatSync',(...args:Parameters<typeof fs.lstatSync>)=>{
+  const result=lstat(...args);
+  if(args[0]===f.path&&++inspections===(boundary==='initial'?1:2)){
+   fs.renameSync(f.next,f.path);const observed=fs.fstatSync(held);assert.equal(observed.nlink,0);retired=true;return observed;
+  }
+  return result;
+ });
+ syncBuiltinESMExports();
+ try{
+  const rejection=foreign==='symlink'?/FOREIGN_RESOURCE_KIND/:foreign==='hardlink'?/FOREIGN_RESOURCE_LINKS/:foreign==='mode'?/FOREIGN_RESOURCE_MODE/:/FOREIGN_RESOURCE_LIMIT/;
+  assert.throws(()=>readPrivateText(f.path,4096),rejection);assert.equal(retired,true);
+  assert.equal(fs.readFileSync(target,'utf8'),JSON.stringify(f.config));
+ }finally{mocked.mock.restore();syncBuiltinESMExports();fs.closeSync(held)}
+});
+
+for(const mutation of ['truncate','same-size'] as const)test('final retired lookup preserves observed '+mutation+' rejection',{skip:process.platform==='win32'},async t=>{
+ const f=await fixture(t);await writeFile(f.next,JSON.stringify({...f.config,clientId:'moremote-cli-replacement'}),{mode:0o600});
+ const held=fs.openSync(f.path,fs.constants.O_RDONLY),lstat=fs.lstatSync,original=lstat(f.path);let inspections=0,changed=false;
+ const mocked=t.mock.method(fs,'lstatSync',(...args:Parameters<typeof fs.lstatSync>)=>{
+  const result=lstat(...args);
+  if(args[0]===f.path&&++inspections===2){
+   fs.writeFileSync(f.path,mutation==='truncate'?'{}':'x'.repeat(original.size));
+   fs.utimesSync(f.path,new Date(),new Date(Date.now()+1000));fs.renameSync(f.next,f.path);
+   const observed=fs.fstatSync(held);assert.equal(observed.nlink,0);changed=true;return observed;
+  }
+  return result;
+ });
+ syncBuiltinESMExports();
+ try{assert.throws(()=>readPrivateText(f.path,4096),/FOREIGN_RESOURCE_CHANGED/);assert.equal(changed,true)}
+ finally{mocked.mock.restore();syncBuiltinESMExports();fs.closeSync(held)}
+});
+
 for(const boundary of ['lstat','read'] as const)for(const foreign of ['symlink','hardlink','mode','oversize'] as const)test('replacement after '+boundary+' still rejects '+foreign,{skip:foreign==='mode'&&process.platform==='win32'},async t=>{
  const f=await fixture(t),target=join(f.dir,'foreign.json');await writeFile(target,JSON.stringify(f.config),{mode:0o600});
  if(foreign==='symlink')fs.symlinkSync(target,f.next);
