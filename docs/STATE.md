@@ -1,5 +1,21 @@
 # Project state
 
+## Public 0.1.9 and release operator
+
+Source `3dfb1986db11cbcdb91f00e5656aef5a2fe18aa6` is public as `v0.1.9`.
+Main CI `44493968482` and the hosted release `44493968462` succeeded.
+The release operator's read-only receiver check downloaded the npm archive and
+both GitHub assets anonymously, verified all checksums and installed the same
+archive in an isolated prefix. Its CLI printed 0.1.9. SHA256 of the
+171,886-byte public archive is
+`7671890a2e14db8b91bf63f782be7ea2d3f18b6bf495e4d519a33675d8fee954`.
+
+See [the release runbook](releasing.md) for operator commands, required
+authorization and sibling procedures. A fresh local check passed all 286 tests,
+typecheck and build. The isolated packaged-upgrade smoke accepted the compatible
+candidate and rolled back the failing candidate. The operator is source-only
+at this checkpoint.
+
 ## Public0.1.8 — 2026-11-15
 
 Reviewed sourced545c23 is public as0.1.8. All3OS CI43718667202 and release

@@ -1,10 +1,8 @@
 # Documentation index
 
 **MoRemote CLI**: independent optional `moremote-cli` repository/command,
-public npm `@moxuli/moremote`0.1.1, over unmodified Paseo.
-Activity/widget support is local unreleased source, not part of that published
-package. [[STATE]] separates targeted local evidence from native/device/live
-cloud acceptance, which remains pending for these new surfaces; cloud is disabled.
+public npm `@moxuli/moremote`, over unmodified Paseo. See [STATE](STATE.md)
+for the public release and the separate host, device and cloud acceptance records.
 
 - [Current state and external gates](STATE.md)
 - [Architecture](specs/01-architecture.md)
@@ -13,7 +11,7 @@ cloud acceptance, which remains pending for these new surfaces; cloud is disable
 - [Endpoint controls, occurrences and receipt lifecycle](specs/04-control-and-receipt-lifecycle.md)
 - [Endpoint and lifecycle behavior](specs/05-endpoint-and-lifecycle.md)
 - [Managed updates and compatibility](specs/06-managed-updates.md)
-- [Public release and existing publishing-secret prerequisites](releasing.md)
+- [Public release operator and receiver verification](releasing.md)
 - [Managed-update decision](decisions/0001-managed-updates.md)
 - [Managed-update implementation plan](plans/2026-11-10-managed-updates.md)
 - [Configuration registry](configuration.md)

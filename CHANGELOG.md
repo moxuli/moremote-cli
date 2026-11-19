@@ -1,5 +1,10 @@
 # Changelog
 
+## Unreleased
+
+- Add a CLI release operator with exact-source CI preflight, authorized tag
+  publication and independent GitHub/npm artifact verification.
+
 ## 0.1.9 — 2026-11-19
 
 - Emit `agent.attention` notifications immediately for interactive AI permission/question requests (including multi-choice prompts) without requiring a turn transition, preventing missed APNs notifications on prompt waits.

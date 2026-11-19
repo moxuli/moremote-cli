@@ -136,8 +136,8 @@ Default CLI state uses `LOCALAPPDATA/MoRemoteCLI` on Windows, `~/Library/Applica
 
 [Docs](docs/README.md) · [Contributing](CONTRIBUTING.md) · [License](LICENSE) · [Notices](NOTICE)
 
-Public release prerequisites, existing-secret setup and exact verification commands:
-[releasing](docs/releasing.md). Checked-in workflows are not proof of a published package.
+Use the [release runbook](docs/releasing.md) for `npm run release`, public
+package verification and the separate App, cloud and website runbooks.
 
 Widgets and ordinary app/extension sends connect through Paseo and local device
 state. Optional remote Live Activity delivery shares the notification service;
