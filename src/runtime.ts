@@ -112,13 +112,16 @@ export async function runRuntime(dir:string,version?:string){
  if(await reconcileJournal({pair,journal,official,cloud,clock:Date.now}))failure=Error('RECEIPT_RECONCILIATION_FAILED');
  if(journal.pairRevoked(pair.pairId)||pair.relayRetiredAt!==undefined)continue;
  const active=await activatePending(config,dir,pair,cloud,official.info()!.serverId,snapshot.hostName);if(!active)continue;
- let detailsCurrent=false;
+ let detailsCurrent=false;let allowUngatedRequests=false;
  try{
  const payload=await projectSnapshot({...official.notificationSnapshot(),hostName:snapshot.hostName,measuredAt:snapshot.measuredAt},pair,journal,official.generation);
  detailsCurrent=await statePublisher.publish(pair,cloud,payload);
- }catch(error){failure=error;if(await observeRelayRetirement(config,dir,pair,cloud,error))continue}
+ }catch(error){
+ if(error instanceof Error&&(error.message==='NOTIFICATION_REQUEST_LIMIT'||error.message==='NOTIFICATION_STATE_LIMIT'))allowUngatedRequests=true;
+ failure=error;if(await observeRelayRetirement(config,dir,pair,cloud,error))continue
+ }
  try{await publishResolutions(journal,pair,cloud)}catch(error){failure=error}
- try{await publishEvents(pair,cloud,journal,livePublisher,official.liveActivitySnapshot(),detailsCurrent)}catch(error){failure=error}
+ try{await publishEvents(pair,cloud,journal,livePublisher,official.liveActivitySnapshot(),detailsCurrent,allowUngatedRequests)}catch(error){failure=error}
  // Publication failures are independent from acquisition. Preserve the normal
  // three-second command/control cadence while still surfacing degraded status.
  try{for(const envelope of await cloud.commands()){if(stopped||cycleFences.get(cloud.origin)?.error)break;try{await executeOperation({pair,journal,official,cloud,clock:Date.now},envelope)}catch(error){failure=error}}}

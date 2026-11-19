@@ -11,7 +11,7 @@ export async function projectSnapshot(source:Awaited<ReturnType<OfficialClient['
   for(const pending of [...task.pendingRequests].sort((a,b)=>a.requestId.localeCompare(b.requestId))){
    const occurrence=journal.currentOccurrence(source.daemonServerId,task.agentId,pending.requestId);
    if(!occurrence||occurrence.generation!==generation||occurrence.fingerprint!==digest(canonical(pending.request)))continue;
-   if(Buffer.byteLength(task.agentId)>256||Buffer.byteLength(pending.requestId)>256||Buffer.byteLength(JSON.stringify(pending.request))>8192)throw Error('NOTIFICATION_REQUEST_LIMIT');
+   if(Buffer.byteLength(task.agentId)>256||Buffer.byteLength(pending.requestId)>256||Buffer.byteLength(JSON.stringify(pending.request))>24576)throw Error('NOTIFICATION_REQUEST_LIMIT');
    const requestBinding=await occurrenceBinding(pair,occurrence);
    if(journal.isCurrent(occurrence))pendingRequests.push({requestId:pending.requestId,requestBinding,request:pending.request});
   }

@@ -57,6 +57,11 @@ export class OfficialClient implements OfficialOperations{
  if(event.timestamp<latest.timestamp||event.timestamp===latest.timestamp&&event.kind===latest.kind)return;
  pending.next=event;
  }else this.readTerminal(event);
+ }else{
+ // Recover pending question/permission prompts immediately when agent_attention_required
+ // arrives without a preceding agent_permission_request.
+ this.fenceRequestReads(p.agentId,++this.observationOrder);
+ void this.readCurrent(p.agentId,agent=>{for(const r of agent?.pendingPermissions||[])this.emitRequest(p.agentId,r)}).catch(()=>{});
  }}
  if(message.type==='agent_permission_request'){const p=message.payload;this.fenceRequestReads(p.agentId,++this.observationOrder);void this.readCurrent(p.agentId,agent=>{const r=agent?.pendingPermissions?.find(r=>r.id===p.request.id);if(r)this.emitRequest(p.agentId,r)}).catch(()=>{})}
  if(message.type==='agent_permission_resolved'){const p=message.payload;this.fenceRequestReads(p.agentId,++this.observationOrder);this.journal?.resolution(this.serverId,p.agentId,p.requestId,this.generation,p.resolution);const task=this.pendingTasks.get(p.agentId);if(task){task.pendingRequests=task.pendingRequests.filter(r=>r.requestId!==p.requestId);if(!task.pendingRequests.length)this.pendingTasks.delete(p.agentId)}}

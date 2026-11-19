@@ -66,3 +66,26 @@ test('unknown title metadata leaves the independent notification outbox live',as
   assert.equal(journal.attention(pair.pairId,Date.now()).length,0);
  }finally{journal.close();await rm(dir,{recursive:true,force:true})}
 });
+
+test('question notifications are not starved when state exceeds capacity or fails transiently',async()=>{
+ const dir=await mkdtemp(join(tmpdir(),'moremote-question-ungated-')),journal=new OperationJournal(join(dir,'journal.sqlite'));
+ try{
+  const now=Date.now(),pair={pairId:'11111111-1111-4111-8111-111111111111',rootKey:Buffer.alloc(32,7).toString('base64url'),hostToken:'synthetic',active:true};
+  const requests:any[]=[];
+  const cloud=new CloudClient('https://example.test',pair.pairId,pair.hostToken,false,(async(_url,init)=>{
+   const body=JSON.parse(String(init?.body));requests.push(body);
+   return new Response(JSON.stringify({ok:true,attention:body.attention.map((item:any)=>({id:item.id,accepted:true}))}),{headers:{'content-type':'application/json','x-moremote-live-activity':'2'}});
+  }) as typeof fetch);
+  cloud.liveActivityV2=true;
+  await queueAttention(journal,pair,{agentId:'agent',requestId:'req-fresh',kind:'question',timestamp:now});
+  await publishEvents(pair,cloud,journal,new LiveActivityPublisher(journal),null,false,false);
+  assert.equal(requests.length,0,'fresh question waits briefly when state may recover');
+  await publishEvents(pair,cloud,journal,new LiveActivityPublisher(journal),null,false,true);
+  assert.equal(requests.length,1,'ungated question publishes immediately when state hit capacity');
+  assert.equal(requests[0].attention[0].kind,'question');
+  await queueAttention(journal,pair,{agentId:'agent',requestId:'req-aged',kind:'question',timestamp:now-20000});
+  await publishEvents(pair,cloud,journal,new LiveActivityPublisher(journal),null,false,false);
+  assert.equal(requests.length,2,'question older than 15s publishes instead of starving on transient state errors');
+  assert.equal(requests[1].attention[0].kind,'question');
+ }finally{journal.close();await rm(dir,{recursive:true,force:true})}
+});

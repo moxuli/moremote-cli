@@ -6,8 +6,13 @@ import {LIMITS} from './limits.js';
 
 /** Independent durable acknowledgements sharing one transport request. */
 export async function publishEvents(pair:Pair, cloud:CloudClient, journal:OperationJournal,
-  publisher:LiveActivityPublisher, snapshot:LiveSnapshot|null, detailsCurrent:boolean) {
-  const pending=journal.attention(pair.pairId,Date.now()).filter(item=>detailsCurrent||!['question','permission'].includes(item.body.kind));
+  publisher:LiveActivityPublisher, snapshot:LiveSnapshot|null, detailsCurrent:boolean, allowUngatedRequests=false) {
+  const now=Date.now();
+  // Never starve question/permission alerts forever when optional quick-reply
+  // state hydration exceeds capacity or fails transiently.
+  const pending=journal.attention(pair.pairId,now).filter(item=>
+    detailsCurrent||allowUngatedRequests||!['question','permission'].includes(item.body.kind)
+    ||(typeof item.body.envelope?.issuedAt==='number'&&now-item.body.envelope.issuedAt>=15000));
   if (!cloud.liveActivityV2) {
     for(const item of pending){await cloud.attention(item.body);journal.attentionSent(pair.pairId,item.id)}
     return;

@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.1.9 — 2026-11-19
+
+- Emit `agent.attention` notifications immediately for interactive AI permission/question requests (including multi-choice prompts) without requiring a turn transition, preventing missed APNs notifications on prompt waits.
+- Raise the serialized permission request projection cap from 8 KiB to 24 KiB to align with the iOS client's structured question/choice payload budget while staying bounded.
+- Add a 15-second ungated grace window after an interactive permission request is opened so transient client presence states never suppress urgent user-input alerts without adding Cloudflare Worker polling traffic.
+
 ## 0.1.8 — 2026-11-15
 
 - Resolve encrypted Live Activity titles from exact phone-provided source hints and current official workspace metadata. Keep imported/shared-root conversations on their own fresh agent titles; unknown publication retries retain their original bytes.

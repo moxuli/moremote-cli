@@ -28,12 +28,17 @@ test('notification state contains every current bound request and no conversatio
  assert.deepEqual(updated.tasks[0].pendingRequests.map(row=>row.requestId),['second']);
 });
 
-test('notification projection reports capacity instead of silently dropping an actionable request',async t=>{
+test('notification projection supports multi-question prompts up to 24 KiB and rejects oversized ones',async t=>{
  const dir=await mkdtemp(join(tmpdir(),'moremote-notification-capacity-'));
  const journal=new OperationJournal(join(dir,'journal.sqlite'));
  t.after(async()=>{journal.close();await rm(dir,{recursive:true,force:true})});
  const pair={pairId:'11111111-1111-4111-8111-111111111111',rootKey:Buffer.alloc(32,7).toString('base64url'),hostToken:'synthetic',active:true};
- const request={id:'large',provider:'mock',name:'Plan',kind:'plan',input:{plan:'x'.repeat(9_000)},actions:[]};
+ const mediumQuestion={id:'medium',provider:'mock',name:'AskUserQuestion',kind:'question',input:{questions:[{header:'Scope',question:'中'.repeat(4_000),options:[{label:'A'},{label:'B'}]}]},actions:[{id:'yes',label:'Submit',behavior:'allow'}]};
+ journal.observe('daemon','agent','generation',mediumQuestion);
+ const okSource={version:1,daemonServerId:'daemon',tasks:[{agentId:'agent',pendingRequests:[{requestId:'medium',request:mediumQuestion}]}]} as unknown as Parameters<typeof projectSnapshot>[0];
+ const projected=await projectSnapshot(okSource,pair,journal,'generation');
+ assert.deepEqual(projected.tasks[0].pendingRequests.map(row=>row.requestId),['medium']);
+ const request={id:'large',provider:'mock',name:'Plan',kind:'plan',input:{plan:'x'.repeat(26_000)},actions:[]};
  journal.observe('daemon','agent','generation',request);
  const source={version:1,daemonServerId:'daemon',tasks:[{agentId:'agent',pendingRequests:[{requestId:'large',request}]}]} as unknown as Parameters<typeof projectSnapshot>[0];
  await assert.rejects(projectSnapshot(source,pair,journal,'generation'),/NOTIFICATION_REQUEST_LIMIT/);
