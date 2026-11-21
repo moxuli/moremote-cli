@@ -21,8 +21,16 @@ enrollment, explicit setup installs/verifies the exact current version before
 enabling the feature, then moves active/bootstrap while retaining previous
 packages, pairs/custom origin and the independent auto-update opt-out.
 `SETUP_CURRENT_PACKAGE_UNAVAILABLE`/`SETUP_CAPABILITY_REQUIRED` are failures,
-never enabled success or an older-package fallback. Nothing patches/upgrades
-official Paseo or global tools. This capability requires CLI0.1.4 or later.
+never enabled success or an older-package fallback. Nothing patches/upgrades/stops
+official Paseo or global tools. When configured without `--target` against an
+initialized local `paseoHome` matching `daemonServerId` (fail-closed on missing or
+unsafe `server-id`), the runtime includes a local Paseo watchdog (`paseo daemon start
+--home <paseoHome> --timeout 15`, resolving `PATH`, node sibling bins, and `.npmrc`
+prefix without shell wrappers) for login/boot autostart and crash recovery after a
+brief restart grace window; Linux units set `KillMode=process`, isolate watchdog
+launches in a transient `systemd-run --user --scope` when running under systemd, and
+attempt non-interactive `loginctl --no-ask-password enable-linger`; macOS LaunchAgents
+set `AbandonProcessGroup`. This capability requires CLI0.1.4 or later.
 
 The custom-domain default applies only when `apiOrigin` is absent. Every saved
 origin remains authoritative, including the former default

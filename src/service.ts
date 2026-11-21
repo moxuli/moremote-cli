@@ -11,10 +11,11 @@ function xml(s:string){return s.replaceAll('&','&amp;').replaceAll('<','&lt;').r
 function systemd(s:string){if(/[\r\n\0]/.test(s))throw Error('INVALID_SERVICE_PATH');return '"'+s.replaceAll('\\','\\\\').replaceAll('"','\\"').replaceAll('%','%%').replaceAll('$',()=> '$$')+'"'}
 function windowsArg(s:string){return '"'+s.replace(/(\\*)"/g,'$1$1\\"').replace(/(\\+)$/,'$1$1')+'"'}
 export interface ServiceDefinition{path:string;content:string;platform:string;entry:string}
+export interface ServiceInstallResult{lingerEnabled:boolean|null}
 export function serviceDefinition(platform:string,home:string,node:string,entry:string,data:string):ServiceDefinition{
  const marker='Managed by moremote-cli; per-user ownership v1; owner='+createHash('sha256').update(data).digest('hex');
- if(platform==='darwin')return {platform,entry,path:join(home,'Library','LaunchAgents','com.moremote.cli.plist'),content:'<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd"><plist version="1.0"><dict><key>Label</key><string>com.moremote.cli</string><key>Description</key><string>'+marker+'</string><key>ProgramArguments</key><array>'+[node,entry,'run','--data-dir',data].map(s=>'<string>'+xml(s)+'</string>').join('')+'</array><key>RunAtLoad</key><true/><key>KeepAlive</key><true/><key>ProcessType</key><string>Background</string></dict></plist>\n'};
- if(platform==='linux')return {platform,entry,path:join(process.env.XDG_CONFIG_HOME||join(home,'.config'),'systemd','user','moremote-cli.service'),content:'[Unit]\nDescription='+marker+'\n[Service]\nExecStart='+[node,entry,'run','--data-dir',data].map(systemd).join(' ')+'\nRestart=on-failure\nRestartSec=5\n[Install]\nWantedBy=default.target\n'};
+ if(platform==='darwin')return {platform,entry,path:join(home,'Library','LaunchAgents','com.moremote.cli.plist'),content:'<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd"><plist version="1.0"><dict><key>Label</key><string>com.moremote.cli</string><key>Description</key><string>'+marker+'</string><key>ProgramArguments</key><array>'+[node,entry,'run','--data-dir',data].map(s=>'<string>'+xml(s)+'</string>').join('')+'</array><key>RunAtLoad</key><true/><key>KeepAlive</key><true/><key>AbandonProcessGroup</key><true/><key>ProcessType</key><string>Background</string></dict></plist>\n'};
+ if(platform==='linux')return {platform,entry,path:join(process.env.XDG_CONFIG_HOME||join(home,'.config'),'systemd','user','moremote-cli.service'),content:'[Unit]\nDescription='+marker+'\n[Service]\nExecStart='+[node,entry,'run','--data-dir',data].map(systemd).join(' ')+'\nKillMode=process\nRestart=on-failure\nRestartSec=5\n[Install]\nWantedBy=default.target\n'};
  if(platform==='win32')return {platform,entry,path:join(data,'moremote-cli-task.xml'),content:'<?xml version="1.0" encoding="UTF-16"?><Task version="1.2" xmlns="http://schemas.microsoft.com/windows/2004/02/mit/task"><RegistrationInfo><Description>'+marker+'</Description></RegistrationInfo><Triggers><LogonTrigger><UserId>'+xml(userInfo().username)+'</UserId><Enabled>true</Enabled></LogonTrigger></Triggers><Principals><Principal id="CurrentUser"><UserId>'+xml(userInfo().username)+'</UserId><LogonType>InteractiveToken</LogonType><RunLevel>LeastPrivilege</RunLevel></Principal></Principals><Settings><MultipleInstancesPolicy>IgnoreNew</MultipleInstancesPolicy><ExecutionTimeLimit>PT0S</ExecutionTimeLimit><Enabled>true</Enabled></Settings><Actions Context="CurrentUser"><Exec><Command>'+xml(node)+'</Command><Arguments>'+xml([entry,'run','--data-dir',data].map(windowsArg).join(' '))+'</Arguments></Exec></Actions></Task>'};
  throw Error('UNSUPPORTED_SERVICE_PLATFORM');
 }
@@ -135,16 +136,23 @@ async function registerWindowsService(def:ServiceDefinition){
  // Never leave the native-import copy present when the retained runtime starts.
  await command('schtasks',['/Run','/TN',taskName]);
 }
-export async function installService(def:ServiceDefinition){
+export async function installService(def:ServiceDefinition):Promise<ServiceInstallResult>{
  const status=await serviceStatus(def);requireKnown(status);
  await access(def.entry);
  if(status.registration==='registered')await stopService(def);
  await writeDefinition(def);
- if(def.platform==='darwin')await command('launchctl',['bootstrap','gui/'+process.getuid!(),def.path]);
- else if(def.platform==='linux'){
+ if(def.platform==='darwin'){await command('launchctl',['bootstrap','gui/'+process.getuid!(),def.path]);return {lingerEnabled:null}}
+ if(def.platform==='linux'){
   await command('systemctl',['--user','daemon-reload']);
   await command('systemctl',['--user','enable','--now','moremote-cli.service']);
- }else await registerWindowsService(def);
+  try{
+   await command('loginctl',['--no-ask-password','enable-linger',userInfo().username],true,5000);
+   return {lingerEnabled:true};
+  }catch(error){
+   return {lingerEnabled:missing(error)?null:false};
+  }
+ }
+ await registerWindowsService(def);return {lingerEnabled:null};
 }
 export async function stopService(def:ServiceDefinition){
  const status=await serviceStatus(def);requireKnown(status);

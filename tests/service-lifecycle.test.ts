@@ -211,3 +211,36 @@ test('default subprocess capture does not leak npm or manager output before sani
   assert.doesNotMatch(result.stdout+result.stderr,/\/synthetic\/private\//,'Captured child paths must never reach the caller output.');
  }
 });
+
+test('linux installService attempts non-interactive loginctl enable-linger and preserves KillMode=process / AbandonProcessGroup isolation',executableFixtures,async()=>{
+ const f=await fixture();try{
+  const macDef=serviceDefinition('darwin',f.home,process.execPath,f.entry,f.data);
+  assert.match(macDef.content,/<key>AbandonProcessGroup<\/key><true\/>/);
+  const def=await f.select('linux',false);
+  assert.match(def.content,/^KillMode=process$/m);
+  const missingResult=await installService(def);
+  assert.deepEqual(missingResult,{lingerEnabled:null});
+  const loginctl=join(f.bin,'loginctl');
+  await writeFile(loginctl,`#!${process.execPath}
+const fs=require('node:fs');
+fs.appendFileSync(process.env.SERVICE_LOG,JSON.stringify({program:'loginctl',args:process.argv.slice(2)})+'\\n');
+process.exit(1);
+`);
+  await chmod(loginctl,0o700);
+  const failedResult=await installService(def);
+  assert.deepEqual(failedResult,{lingerEnabled:false});
+  await writeFile(loginctl,`#!${process.execPath}
+const fs=require('node:fs');
+fs.appendFileSync(process.env.SERVICE_LOG,JSON.stringify({program:'loginctl',args:process.argv.slice(2)})+'\\n');
+process.exit(0);
+`);
+  await chmod(loginctl,0o700);
+  const okResult=await installService(def);
+  assert.deepEqual(okResult,{lingerEnabled:true});
+  const linger=(await f.commands()).filter(c=>c.program==='loginctl');
+  assert.equal(linger.length,2);
+  assert.equal(linger[0].args[0],'--no-ask-password');
+  assert.equal(linger[0].args[1],'enable-linger');
+ }finally{await f.close()}
+});
+

@@ -1,7 +1,9 @@
 # Changelog
 
-## Unreleased
+## 0.1.10 — 2026-11-22
 
+- Add a local Paseo autostart and crash-recovery watchdog inside `runRuntime` (`src/paseo-watchdog.ts`) when configured without an explicit `--target` against an initialized local `paseoHome` (fail-closed identity/ownership checks on `server-id` and config files, `.npmrc` prefix + node-sibling resolution without `cmd.exe` shell wrappers, 4-second restart grace window, pre-boot PID reuse detection, and exponential backoff).
+- Isolate Paseo daemon lifecycle from companion stop/uninstall via `KillMode=process` and `systemd-run --user --scope` on Linux and `AbandonProcessGroup` on macOS, and attempt non-interactive `loginctl --no-ask-password enable-linger` during Linux `installService` with visible guidance if denied.
 - Add a CLI release operator with exact-source CI preflight, authorized tag
   publication and independent GitHub/npm artifact verification.
 

@@ -19,6 +19,7 @@ import {inspectResource} from './resources.js';
 import {LiveActivityPublisher} from './live-activity.js';
 import {publishEvents} from './event-publication.js';
 import {encryptNotificationPreview} from './notification-preview.js';
+import {PaseoWatchdog} from './paseo-watchdog.js';
 function stableId(value:unknown){const h=createHash('sha256').update(JSON.stringify(value)).digest('hex').slice(0,32);return h.slice(0,8)+'-'+h.slice(8,12)+'-'+h.slice(12,16)+'-'+h.slice(16,20)+'-'+h.slice(20)}
 export async function queueAttention(journal:OperationJournal,pair:Pair,event:Attention&{sourceFingerprint?:string;occurrence?:Occurrence},now=Date.now(),includePreview=true){
  if(event.timestamp+LIMITS.snapshotMs<=now||event.timestamp>now+LIMITS.futureMs)return;
@@ -56,7 +57,8 @@ export async function runRuntime(dir:string,version?:string){
  const drainWake=new AbortController();const parentMessage=(message:unknown)=>{if(message&&typeof message==='object'&&'kind' in message&&message.kind==='moremote-drain'){draining=true;drainWake.abort()}};
  const parentGone=()=>{draining=true;drainWake.abort()};
  let detach:(()=>void)|undefined,closeJournal:(()=>void)|undefined;
- const release=await ownRuntime(dir,()=>({stage,lastError,activePairs,version:version??null}),stop);
+ const watchdog=new PaseoWatchdog();
+ const release=await ownRuntime(dir,()=>({stage,lastError,activePairs,version:version??null,paseoWatchdog:watchdog.status()}),stop);
  const enrollment=new LocalEnrollment(dir);
  try{
  if(!inspectResource(join(dir,'config.json'),'file',true))await saveConfig(dir,await loadConfig(dir));
@@ -91,7 +93,7 @@ export async function runRuntime(dir:string,version?:string){
  if(pair.active&&!journal.pairRevoked(pair.pairId))try{await publishResolutions(journal,pair,cloud)}catch(error){failure=error}
  }
  if(stopped)break;
- if(!official||!official.sdk.isConnected){detach?.();await official?.close().catch(()=>{});stage='connecting';official=new OfficialClient(config,journal);await official.connect();const serverId=official.info()!.serverId;if(!config.daemonServerId){config.daemonServerId=serverId;await saveConfig(dir,config)}detach=official.onAttention(event=>{if(attentionQueue.length<500)attentionQueue.push(event);else lastError='ATTENTION_QUEUE_LIMIT'});measuredAt=0;}
+ if(!official||!official.sdk.isConnected){detach?.();await official?.close().catch(()=>{});stage='connecting';const openOfficial=async()=>{const client=new OfficialClient(config,journal);try{await client.connect();return client}catch(error){await client.close().catch(()=>{});throw error}};try{official=await openOfficial()}catch(error){if(stopped||draining)throw error;const recovery=await watchdog.ensureAfterConnectFailure(config,{signal:controller.signal});if(!recovery.started||stopped||draining)throw error;official=await openOfficial()}watchdog.onConnected();const serverId=official.info()!.serverId;if(!config.daemonServerId){config.daemonServerId=serverId;await saveConfig(dir,config)}detach=official.onAttention(event=>{if(attentionQueue.length<500)attentionQueue.push(event);else lastError='ATTENTION_QUEUE_LIMIT'});measuredAt=0;}
  official.setLiveActivityEnabled(config.cloudEnabled&&config.pairs.some(pair=>pair.active&&!journal.pairRevoked(pair.pairId)&&!!clouds.get(pair.pairId)?.liveActivityInterest));
  try{await enrollment.cycle(config,official.info()!.serverId,pair=>{
   const origin=pair.apiOrigin||config.apiOrigin!;pollOrigins.add(origin);

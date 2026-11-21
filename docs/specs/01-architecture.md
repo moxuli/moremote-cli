@@ -6,9 +6,12 @@
 ## Purpose and boundaries
 
 MoRemote CLI (`moremote-cli`) is the optional open-source enhancement layer for MoRemote.
-It consumes official Paseo interfaces. It never patches, forks, replaces or
-silently updates Paseo. The official daemon continues owning agents, sessions,
-tools and approvals. Baseline MoRemote works without this companion.
+It consumes official Paseo interfaces. It never patches, forks, replaces, stops or
+silently updates Paseo. When bound to a local initialized `PASEO_HOME` (without
+an explicit `--target`), the companion runtime may launch `paseo daemon start`
+after a reboot or crash so paired phones can reconnect automatically. The official
+daemon continues owning agents, sessions, tools and approvals. Baseline MoRemote
+works without this companion.
 
 This repository must build and run independently of the app repository, any
 private automation workspace or a developer's personal machine configuration.

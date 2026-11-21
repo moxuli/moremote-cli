@@ -3,7 +3,7 @@
 Optional, independent Apache-2.0 computer companion for MoRemote and an **unmodified Paseo 0.15.3** daemon. Existing official-only clients keep working without this project or its cloud.
 
 Canonical repository/command: `moremote-cli`; public npm package:
-**`@moxuli/moremote`** (release **0.1.9**); source entry: `bin/moremote-cli.js`.
+**`@moxuli/moremote`** (release **0.1.10**); source entry: `bin/moremote-cli.js`.
 There is no unscoped npm alias or automatic adoption of foreign/old state.
 
 ## Install the published package
@@ -17,7 +17,9 @@ Requires an available public package and a user-owned npm prefix; never use sudo
 or upgrade global Node/tools on this project's behalf. First installed-package
 `run` or explicit `service-install --yes` creates an independently owned private
 managed installation with automatic updates enabled. Source-checkout `run`
-alone stays manual. No command starts/upgrades the official daemon.
+alone stays manual. When bound to a local `PASEO_HOME` (without `--target`),
+`run` and the owned service automatically start or self-heal the local Paseo
+daemon after a reboot or crash, while `stop` and `uninstall` leave Paseo untouched. No command upgrades or stops the official daemon.
 
 ## Build and foreground use
 
@@ -120,7 +122,7 @@ Endpoint cancellation/revocation uses authenticated encrypted controls and durab
 
 - `status` and `check` are redacted. Only explicit `check --connect` contacts the selected official daemon (read-only).
 - `setup --yes`: explicit automatic-enrollment/cloud opt-in plus only the owned per-user background service; no second user pairing or official changes. Existing custom authorities, phone records and update opt-out survive.
-- `service-install --yes`: explicit per-user LaunchAgent on macOS, systemd user unit on Linux, or least-privilege interactive-user **logon task** on Windows (not an administrator Windows Service). Foreground `run` needs none of these. No sudo/admin installation.
+- `service-install --yes`: explicit per-user LaunchAgent on macOS, systemd user unit (with best-effort `loginctl enable-linger`) on Linux, or least-privilege interactive-user **logon task** on Windows (not an administrator Windows Service). Foreground `run` needs none of these. No sudo/admin installation.
 - `stop`: stop only the owned companion registration/runtime; never signal an official process. Linux/Windows registration remains available for a future login; macOS bootout leaves its owned plist available for explicit reinstallation.
 - `unpair --pair-id <exact-id>`: revoke one phone, leaving other phones unchanged. Stop the runtime first.
 - `cloud-disable`: stop the companion, persist local cloud-off and per-pair execution tombstones, then relay-revoke every own pairing when reachable. An unreachable relay is pending, not success; local execution remains off. Run again to retry relay revocation. Protected keys are retained for final read-only control/outcome audit; they do not restore execution authority.
