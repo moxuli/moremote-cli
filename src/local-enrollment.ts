@@ -6,7 +6,7 @@ import {parseEnrollmentRequest,requestFingerprint,type EnrollmentRecord,type Enr
 
 export const DEFAULT_API_ORIGIN='https://api.moremote.moxuli.com';
 export interface LocalEnrollmentOptions {clock?:()=>number;files?:(options:DiscoveryOptions)=>EnrollmentFiles;persist?:(directory:string,config:Config)=>Promise<void>}
-export type EnrollmentCloudFactory=(pair:Pair)=>Pick<CloudClient,'create'>;
+export type EnrollmentCloudFactory=(pair:Pair)=>Pick<CloudClient,'create'>&Partial<Pick<CloudClient,'revoke'>>;
 // The runtime's existing serialized cycle owns this consumer and its Config.
 // No watcher, background config writer, listener or official mutation is added.
 export class LocalEnrollment {
@@ -60,8 +60,13 @@ export class LocalEnrollment {
    if(!owned){
     if(creationAttempted)continue;
     if(config.pairs.some(pair=>pair.automaticRequestId===request.id))throw Error('ENROLLMENT_REQUEST_CONFLICT');
-    if(config.pairs.some(pair=>pair.automaticClientId===request.clientId&&pair.daemonServerId===daemonServerId&&pair.revokedAt===undefined&&pair.relayRetiredAt===undefined&&(pair.active||pair.expiresAt===undefined||pair.expiresAt>this.clock())))throw Error('ENROLLMENT_CLIENT_ALREADY_BOUND');
-    if(config.pairs.length>=16||(config.enrollmentRequests?.length??0)>=16)throw Error('PAIRING_LIMIT');
+    const superseded=config.pairs.filter(pair=>pair.automaticClientId===request.clientId&&pair.daemonServerId===daemonServerId&&pair.revokedAt===undefined&&pair.relayRetiredAt===undefined);
+    const retireAt=this.clock();
+    for(const stale of superseded){stale.active=false;stale.relayRetiredAt=retireAt}
+    if(config.pairs.length>=16||(config.enrollmentRequests?.length??0)>=16){
+     if(superseded.length)await this.persist(this.directory,config);
+     throw Error('PAIRING_LIMIT');
+    }
     const generated=makeOffer(origin,this.clock());generated.pair.expiresAt=Math.min(generated.pair.expiresAt!,request.expiresAt);
     const pair:Pair={...generated.pair,daemonServerId,automaticClientId:request.clientId,automaticRequestId:request.id};
     const offer={...generated.offer,version:1 as const,enrollmentToken:pair.enrollmentToken!,expiresAt:pair.expiresAt!};
@@ -69,6 +74,7 @@ export class LocalEnrollment {
     owned={request,bytes:file.text,fingerprint:requestFingerprint(file.text),pairId:pair.pairId,offer,createBytes,created:false};
     config.pairs.push(pair);(config.enrollmentRequests??=[]).push(owned);
     await this.persist(this.directory,config); // Original keys/request precede all cloud I/O.
+    for(const stale of superseded){try{await cloud(stale).revoke?.(AbortSignal.timeout(3000))}catch{}}
    }
    const pair=config.pairs.find(pair=>pair.pairId===owned.pairId);if(!pair)throw Error('ENROLLMENT_PAIR_MISSING');
    if(pair.active){files.removeResponse(owned);files.removeRequest(name,file.identity);continue}

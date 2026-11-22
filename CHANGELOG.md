@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.1.11 — 2026-11-23
+
+- Retire stale unrevoked `automaticClientId` pairings for the same `(clientId, daemonServerId)` and issue a best-effort relay `DELETE /v1/pairs/:pairId` when a fresh authenticated local-enrollment request arrives (`src/local-enrollment.ts`, `src/cloud-client.ts`), unblocking phone re-enablement when a prior disable/re-pair left an active server pairing and stopping stale unencrypted push alerts.
+
 ## 0.1.10 — 2026-11-22
 
 - Add a local Paseo autostart and crash-recovery watchdog inside `runRuntime` (`src/paseo-watchdog.ts`) when configured without an explicit `--target` against an initialized local `paseoHome` (fail-closed identity/ownership checks on `server-id` and config files, `.npmrc` prefix + node-sibling resolution without `cmd.exe` shell wrappers, 4-second restart grace window, pre-boot PID reuse detection, and exponential backoff).

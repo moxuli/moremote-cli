@@ -79,6 +79,7 @@ export async function enrollmentFixture(t:TestContext){
   }
   else if(request.method==='GET'&&request.url!.endsWith('/commands'))result={ok:true,commands:[]};
   else if(request.method==='GET'&&request.url!.endsWith('/activities'))result={ok:true,subscriptions:[]};
+  else if(request.method==='DELETE'&&request.url==='/v1/pairs/'+id)result={ok:true,status:'revoked',authority:'relay'};
   else if(!['PUT','POST'].includes(request.method!))throw Error('UNEXPECTED_CLOUD_REQUEST');
   response.writeHead(200,{'content-type':'application/json'});response.end(JSON.stringify(result));
  }catch(error){failure=error;response.writeHead(500,{'content-type':'application/json'});response.end(JSON.stringify({ok:false,error:{code:'FIXTURE_FAILED'}}))}});

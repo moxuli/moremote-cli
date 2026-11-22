@@ -68,7 +68,7 @@ export class CloudClient{
  create(body:unknown,signal?:AbortSignal){return this.request('POST','/pairs',body,signal)}
  pair(){return this.request('GET',this.path())}
  activate(body:unknown){return this.request('POST',this.path('/activate'),body)}
- revoke(){return this.request('DELETE',this.path())}
+ revoke(signal?:AbortSignal){return this.request('DELETE',this.path(),undefined,signal)}
  async commands():Promise<Envelope[]>{const result=await this.request('GET',this.path('/commands'));if(!Array.isArray(result.commands)||result.commands.length>100)throw Error('INVALID_COMMAND_PAGE');return result.commands.map(row=>object(row).envelope as Envelope).filter(Boolean)}
  async dispatch(id:string){const r=await this.request('POST',this.path('/commands/'+id+'/dispatch'),{});if(typeof r.dispatchAllowed!=='boolean')throw Error('INVALID_DISPATCH_RESPONSE');return {dispatchAllowed:r.dispatchAllowed}}
  receipt(id:string,body:{state:ReceiptState;revision:number;envelope:Envelope}){return this.request('POST',this.path('/commands/'+id+'/receipt'),body)}

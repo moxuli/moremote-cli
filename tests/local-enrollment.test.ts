@@ -205,3 +205,23 @@ test('real runtime serial cycle enrolls before any workspace and cleans private 
   finally{timeout.abort();t.signal.removeEventListener('abort',terminate)}
  }
 });
+
+test('fresh request from the same client retires an unrevoked prior pair and issues a replacement offer',async t=>{
+ const f=await admitted(t);f.allowClaim();const config=await loadConfig(f.state),stale=config.pairs[0];
+ assert.equal(await activatePending(config,f.state,stale,f.cloud(stale),daemon,'Synthetic computer'),true);
+ await f.consumer.cleanup(config);
+ const replacementId='66666666-6666-4666-8666-666666666666';
+ const replacement=f.request({id:replacementId});
+ await f.put(replacement);
+ await f.consumer.cycle(await loadConfig(f.state),daemon,f.cloud);
+ const updated=await loadConfig(f.state);
+ assert.equal(updated.pairs.length,2);
+ assert.equal(updated.pairs[0].pairId,stale.pairId);
+ assert.equal(updated.pairs[0].active,false);
+ assert.equal(typeof updated.pairs[0].relayRetiredAt,'number');
+ assert.ok(f.cloudRequests.some(request=>request.method==='DELETE'&&request.path==='/v1/pairs/'+stale.pairId));
+ const response=object(JSON.parse(await readFile(join(f.tree,'responses',replacementId+'.json'),'utf8')));
+ assert.equal(response.status,'offer');
+ assert.notEqual(object(response.offer).pairId,stale.pairId);
+});
+
