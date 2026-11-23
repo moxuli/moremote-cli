@@ -1,5 +1,10 @@
 # Changelog
 
+## Unreleased
+
+- Allow the Windows sign-in task to start and continue on battery and retry abnormal exits. Repair the original defaults on an existing enabled owned task when the updated runtime next runs.
+- Keep local Paseo recovery independent of cloud request delays and rate limits while preserving revocation and dispatch ordering.
+
 ## 0.1.11 — 2026-11-23
 
 - Retire stale unrevoked `automaticClientId` pairings for the same `(clientId, daemonServerId)` and issue a best-effort relay `DELETE /v1/pairs/:pairId` when a fresh authenticated local-enrollment request arrives (`src/local-enrollment.ts`, `src/cloud-client.ts`), unblocking phone re-enablement when a prior disable/re-pair left an active server pairing and stopping stale unencrypted push alerts.

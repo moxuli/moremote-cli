@@ -195,6 +195,15 @@ Foreground run requires no installed service and owns an authenticated local IPC
 
 Explicit service-install/update/uninstall use --yes. macOS LaunchAgent, Linux systemd user unit (XDG_CONFIG_HOME respected), and Windows least-privilege current-user logon task are separate optional platform adapters. Windows ownership probing requires built-in PowerShell; no administrator Windows Service is claimed. Files/registrations bind to the companion data-directory hash; mismatched ownership or unavailable managers fail honestly. Only companion-owned resources are removable. No official service, daemon data, history or credentials are altered.
 
+The Windows task allows battery startup and continuation, and retries abnormal
+exits. A running current CLI may update those settings in place on an existing
+enabled task whose complete native definition still matches the original template,
+including ownership, action and current-user logon principal. The migration cannot create or enable
+a task or start it by re-registration. Package install and App host pairing
+never create a task. Local Paseo process supervision runs independently of relay
+control polls or backoff. Authentication and relay control still precede
+companion actions. Explicit targets remain outside local supervision.
+
 Owned filenames alone are insufficient: reject symlinks, hardlinks, wrong resource types, foreign owner/modes, unmarked control records and foreign SQLite application identity before mutation. A stale socket is removable only through matching owned runtime provenance and inode identity. Service-path symlinks are rejected before no-follow/exclusive replacement. Manager inspection still runs when the registration file is absent; unavailable/ambiguous manager state is unknown, never a successful stopped/absent claim.
 
 Cloud-disable durably stops local execution and attempts relay revocation, reporting unreachable relay revocation separately. Per-phone unpair affects only that pairing. Protected keys/journal are retained for final audit and no old pairing is automatically reused. Uninstall retains keys/journal unless --purge explicitly deletes companion state; neither operation undoes official actions or removes unreachable cloud data.

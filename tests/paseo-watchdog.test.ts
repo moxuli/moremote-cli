@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { once } from 'node:events';
+import { createServer } from 'node:http';
 import { spawn } from 'node:child_process';
 import { chmod, mkdir, mkdtemp, readFile, rm, symlink, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
@@ -10,6 +11,7 @@ import { setTimeout as sleep } from 'node:timers/promises';
 import { WebSocketServer } from 'ws';
 import { wrapSessionMessage } from '@getpaseo/protocol/messages';
 import { saveConfig, type Config } from '../src/config.ts';
+import { makeOffer } from '../src/pairing.ts';
 import { requestControl, controlEndpoint } from '../src/control.ts';
 import {
   PaseoWatchdog,
@@ -365,13 +367,30 @@ test('PaseoWatchdog starts immediately on boot, honors restart grace after live 
   }
 });
 
-test('real runRuntime auto-starts local Paseo on boot and self-heals after crash', { timeout: 30000 }, async () => {
+test('real runRuntime starts Paseo while the cloud is blocked and self-heals after a crash', { timeout: 30000 }, async () => {
   const root = await mkdtemp(join(process.platform === 'win32' ? tmpdir() : '/tmp', 'mrw-e2e-'));
   const dir = join(root, 'cli');
   const paseoHome = join(root, 'paseo');
   const binDir = join(root, 'bin');
   const startLog = join(root, 'paseo-starts.jsonl');
   const credToken = 'AbCdEfGhIjKlMnOpQrStUvWxYz0123456789_-AbCdE';
+
+  let unblockCloud!: () => void;
+  const cloudGate = new Promise<void>(resolve => { unblockCloud = resolve; });
+  let waitingForCloud = false;
+  const cloud = createServer(async (_request, response) => {
+    waitingForCloud = true;
+    await cloudGate;
+    response.writeHead(200, { 'content-type': 'application/json' })
+      .end(JSON.stringify({ ok: true, controls: [], commands: [] }));
+  });
+  cloud.listen(0, '127.0.0.1');
+  await once(cloud, 'listening');
+  const cloudAddress = cloud.address();
+  assert.ok(cloudAddress && typeof cloudAddress !== 'string');
+  const apiOrigin = `http://127.0.0.1:${cloudAddress.port}`;
+  const { pair } = makeOffer(apiOrigin);
+  pair.active = true;
 
   const wss = new WebSocketServer({ host: '127.0.0.1', port: 0 });
   await once(wss, 'listening');
@@ -430,7 +449,9 @@ writeFileSync(${JSON.stringify(join(paseoHome, 'paseo.pid'))}, JSON.stringify({ 
       await writeFile(join(binDir, 'paseo'), `#!/bin/sh\nexec "${process.execPath}" "${fakeScript}" "$@"\n`, { mode: 0o755 });
     }
 
-    await saveConfig(dir, baseConfig(paseoHome, { daemonServerId: 'srv_watchdog_e2e' }));
+    await saveConfig(dir, baseConfig(paseoHome, {
+      daemonServerId: 'srv_watchdog_e2e', cloudEnabled: true, allowLoopbackHttp: true, apiOrigin, pairs: [pair],
+    }));
     assert.ok(Buffer.byteLength(controlEndpoint(dir)) < 100 || process.platform === 'win32');
     allowConnect = true;
     child = spawn(process.execPath, ['--import', 'tsx', '--input-type=module', '--eval', "import { runRuntime } from './src/runtime.ts'; await runRuntime(process.argv[1]); process.disconnect?.();", dir], {
@@ -449,9 +470,12 @@ writeFileSync(${JSON.stringify(join(paseoHome, 'paseo.pid'))}, JSON.stringify({ 
       throw Error(label);
     };
 
+    await waitUntil(async () => waitingForCloud && (await readFile(startLog, 'utf8')).length > 0,
+      'CLOUD_REQUEST_BLOCKED_LOCAL_AUTOSTART', 5000);
+    unblockCloud();
     await waitUntil(async () => {
       const st = await requestControl(dir, 'status');
-      return st?.stage === 'local-only' && (st.paseoWatchdog as { recoveries?: number } | undefined)?.recoveries === 1;
+      return st?.stage === 'cloud-enabled' && (st.paseoWatchdog as { recoveries?: number } | undefined)?.recoveries === 1;
     }, 'BOOT_AUTOSTART_FAILED');
 
     allowConnect = false;
@@ -464,7 +488,7 @@ writeFileSync(${JSON.stringify(join(paseoHome, 'paseo.pid'))}, JSON.stringify({ 
 
     await waitUntil(async () => {
       const st = await requestControl(dir, 'status');
-      return st?.stage === 'local-only' && (st.paseoWatchdog as { recoveries?: number } | undefined)?.recoveries === 2;
+      return st?.stage === 'cloud-enabled' && (st.paseoWatchdog as { recoveries?: number } | undefined)?.recoveries === 2;
     }, 'CRASH_SELF_HEAL_FAILED', 18000);
 
     const starts = (await readFile(startLog, 'utf8')).trim().split('\n').map(line => JSON.parse(line) as string[]);
@@ -476,6 +500,9 @@ writeFileSync(${JSON.stringify(join(paseoHome, 'paseo.pid'))}, JSON.stringify({ 
     assert.equal(code, 0);
     assert.ok(isPaseoPidAlive(paseoHome), 'stopping companion must leave Paseo alive');
   } finally {
+    unblockCloud();
+    cloud.closeAllConnections();
+    await new Promise<void>(resolveClose => cloud.close(() => resolveClose()));
     try {
       for (const line of (await readFile(spawnedPidsPath, 'utf8')).trim().split('\n')) {
         const pid = Number(line);

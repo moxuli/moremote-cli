@@ -1,5 +1,6 @@
 import {createHash} from 'node:crypto';
 import {join} from 'node:path';
+import {fileURLToPath} from 'node:url';
 import {setTimeout as sleep} from 'node:timers/promises';
 import {loadConfig,saveConfig,privateDirectory,pruneRetiredPairs,type Pair,type Config} from './config.js';
 import {OfficialClient,type Attention} from './official-client.js';
@@ -20,6 +21,7 @@ import {LiveActivityPublisher} from './live-activity.js';
 import {publishEvents} from './event-publication.js';
 import {encryptNotificationPreview} from './notification-preview.js';
 import {PaseoWatchdog} from './paseo-watchdog.js';
+import {currentDefinition,migrateWindowsLoginRecovery} from './service.js';
 function stableId(value:unknown){const h=createHash('sha256').update(JSON.stringify(value)).digest('hex').slice(0,32);return h.slice(0,8)+'-'+h.slice(8,12)+'-'+h.slice(12,16)+'-'+h.slice(16,20)+'-'+h.slice(20)}
 export async function queueAttention(journal:OperationJournal,pair:Pair,event:Attention&{sourceFingerprint?:string;occurrence?:Occurrence},now=Date.now(),includePreview=true){
  if(event.timestamp+LIMITS.snapshotMs<=now||event.timestamp>now+LIMITS.futureMs)return;
@@ -56,8 +58,9 @@ export async function runRuntime(dir:string,version?:string){
  const controller=new AbortController();const stop=()=>{stopped=true;controller.abort();void official?.sdk.close().catch(()=>{})};
  const drainWake=new AbortController();const parentMessage=(message:unknown)=>{if(message&&typeof message==='object'&&'kind' in message&&message.kind==='moremote-drain'){draining=true;drainWake.abort()}};
  const parentGone=()=>{draining=true;drainWake.abort()};
- let detach:(()=>void)|undefined,closeJournal:(()=>void)|undefined;
+ let detach:(()=>void)|undefined,closeJournal:(()=>void)|undefined,watchdogTask:Promise<void>|undefined;
  const watchdog=new PaseoWatchdog();
+ let recoveryRevision=0,localRetryWake:AbortController|undefined;
  const release=await ownRuntime(dir,()=>({stage,lastError,activePairs,version:version??null,paseoWatchdog:watchdog.status()}),stop);
  const enrollment=new LocalEnrollment(dir);
  try{
@@ -68,7 +71,19 @@ export async function runRuntime(dir:string,version?:string){
  const statePublisher=new NotificationStatePublisher();const livePublisher=new LiveActivityPublisher(journal);
  const retryStates=new Map<string,CloudRetryState>();const pollOrigins=new Set<string>();
  process.once('SIGINT',stop);process.once('SIGTERM',stop);
- while(!stopped&&!draining){try{
+ // This lane only starts the local daemon. Relay control and mutation admission
+ // stay in the existing ordered cycle, even if the relay is offline or paused.
+ const runtimeSignal=AbortSignal.any([controller.signal,drainWake.signal]);
+ watchdogTask=watchdog.monitor(()=>loadConfig(dir),runtimeSignal,()=>{recoveryRevision++;localRetryWake?.abort()});
+ if(process.platform==='win32'){
+  const definition=currentDefinition(fileURLToPath(new URL('../bin/moremote-cli.js',import.meta.url)),dir);
+  void migrateWindowsLoginRecovery(definition).catch(()=>{});
+ }
+
+ while(!stopped&&!draining){
+ const issuedRecovery=recoveryRevision;
+ let openingOfficial=false;
+ try{
  const now=Date.now();journal.cleanup(now);const config=await loadConfig(dir);pollOrigins.clear();let failure:unknown;let acquisitionFailed=false;const clouds=new Map<string,CloudClient>();const cycleFences=new Map<string,CloudRetryState>();
  for(const pair of config.pairs){const revokedAt=journal.revocationTime(pair.pairId);if(revokedAt!==undefined&&pair.revokedAt===undefined){pair.active=false;pair.revokedAt=revokedAt;await saveConfig(dir,config)}if(pair.relayRetiredAt!==undefined)pair.active=false}
  try{await enrollment.cleanup(config)}catch(error){failure=error}
@@ -93,7 +108,7 @@ export async function runRuntime(dir:string,version?:string){
  if(pair.active&&!journal.pairRevoked(pair.pairId))try{await publishResolutions(journal,pair,cloud)}catch(error){failure=error}
  }
  if(stopped)break;
- if(!official||!official.sdk.isConnected){detach?.();await official?.close().catch(()=>{});stage='connecting';const openOfficial=async()=>{const client=new OfficialClient(config,journal);try{await client.connect();return client}catch(error){await client.close().catch(()=>{});throw error}};try{official=await openOfficial()}catch(error){if(stopped||draining)throw error;const recovery=await watchdog.ensureAfterConnectFailure(config,{signal:controller.signal});if(!recovery.started||stopped||draining)throw error;official=await openOfficial()}watchdog.onConnected();const serverId=official.info()!.serverId;if(!config.daemonServerId){config.daemonServerId=serverId;await saveConfig(dir,config)}detach=official.onAttention(event=>{if(attentionQueue.length<500)attentionQueue.push(event);else lastError='ATTENTION_QUEUE_LIMIT'});measuredAt=0;}
+ if(!official||!official.sdk.isConnected){openingOfficial=true;detach?.();await official?.close().catch(()=>{});stage='connecting';const client=new OfficialClient(config,journal);try{await client.connect();official=client}catch(error){await client.close().catch(()=>{});throw error}openingOfficial=false;watchdog.onConnected();const serverId=official.info()!.serverId;if(!config.daemonServerId){config.daemonServerId=serverId;await saveConfig(dir,config)}detach=official.onAttention(event=>{if(attentionQueue.length<500)attentionQueue.push(event);else lastError='ATTENTION_QUEUE_LIMIT'});measuredAt=0;}
  official.setLiveActivityEnabled(config.cloudEnabled&&config.pairs.some(pair=>pair.active&&!journal.pairRevoked(pair.pairId)&&!!clouds.get(pair.pairId)?.liveActivityInterest));
  try{await enrollment.cycle(config,official.info()!.serverId,pair=>{
   const origin=pair.apiOrigin||config.apiOrigin!;pollOrigins.add(origin);
@@ -137,8 +152,16 @@ export async function runRuntime(dir:string,version?:string){
  // sleep to the first original deadline; stop still interrupts this wait.
  const wakeNow=Date.now();let retryWake=Infinity;
  for(const origin of pollOrigins){const retryAt=retryStates.get(origin)?.error?.retryAt;if(retryAt===undefined||retryAt<=wakeNow){retryWake=wakeNow;break}retryWake=Math.min(retryWake,retryAt)}
- if(Number.isFinite(retryWake)&&retryWake>wakeNow)backoff=Math.max(backoff,retryWake-wakeNow);
+ const relayPaused=Number.isFinite(retryWake)&&retryWake>wakeNow;
+ if(relayPaused)backoff=Math.max(backoff,retryWake-wakeNow);
  if(draining)break;
- await sleep(backoff,undefined,{signal:AbortSignal.any([controller.signal,drainWake.signal])}).catch(()=>{});
- }}finally{process.removeListener('SIGINT',stop);process.removeListener('SIGTERM',stop);process.removeListener('message',parentMessage);process.removeListener('disconnect',parentGone);try{detach?.();await official?.close().catch(()=>{})}finally{try{enrollment.close()}finally{try{closeJournal?.()}finally{await release()}}}}
+ // A successful local launch can wake this connection-specific wait, but
+ // must never advance an existing relay pause or wake ordinary polling.
+ if(openingOfficial&&!relayPaused){
+  if(issuedRecovery!==recoveryRevision)continue;
+  localRetryWake=new AbortController();
+ }
+ const wake=localRetryWake?AbortSignal.any([runtimeSignal,localRetryWake.signal]):runtimeSignal;
+ try{await sleep(backoff,undefined,{signal:wake})}catch{}finally{localRetryWake=undefined}
+ }}finally{controller.abort();await watchdogTask;process.removeListener('SIGINT',stop);process.removeListener('SIGTERM',stop);process.removeListener('message',parentMessage);process.removeListener('disconnect',parentGone);try{detach?.();await official?.close().catch(()=>{})}finally{try{enrollment.close()}finally{try{closeJournal?.()}finally{await release()}}}}
 }

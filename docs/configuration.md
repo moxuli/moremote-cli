@@ -30,7 +30,17 @@ prefix without shell wrappers) for login/boot autostart and crash recovery after
 brief restart grace window; Linux units set `KillMode=process`, isolate watchdog
 launches in a transient `systemd-run --user --scope` when running under systemd, and
 attempt non-interactive `loginctl --no-ask-password enable-linger`; macOS LaunchAgents
-set `AbandonProcessGroup`. This capability requires CLI0.1.4 or later.
+set `AbandonProcessGroup`. The local watchdog was introduced in CLI 0.1.10.
+It now checks the owned local daemon independently of cloud availability.
+
+On Windows, the owned background task starts after the current user signs in.
+New tasks can start on battery and restart after abnormal exit. When the
+updated runtime next runs, it repairs the default settings of an existing
+enabled owned login task in place. Disabled, missing and customized tasks are
+left alone. Installing the npm package or saving a host in the App does not
+register a background task. Existing CLI users without a task can run
+`moremote-cli service-install --yes` once to enable sign-in startup without
+re-pairing. An installation that is not running cannot update itself.
 
 The custom-domain default applies only when `apiOrigin` is absent. Every saved
 origin remains authoritative, including the former default

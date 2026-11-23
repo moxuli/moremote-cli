@@ -1,10 +1,12 @@
 import { spawn } from 'node:child_process';
+import { setTimeout as sleep } from 'node:timers/promises';
 import { createHash,randomUUID } from 'node:crypto';
 import { join,dirname } from 'node:path';
 import { homedir,userInfo,tmpdir } from 'node:os';
 import { constants } from 'node:fs';
 import { mkdir,readFile,unlink,access,lstat,open,rename,link,mkdtemp,rm,realpath } from 'node:fs/promises';
 import {privateDirectory,privateManagedDirectory} from './config.js';
+import {windowsLoginRecoverySettings,windowsLoginRecoveryMigration} from './windows-login-recovery.js';
 import {PACKAGE,exactVersion,updateLock} from './update-state.js';
 const taskName='\\MoRemoteCLI';
 function xml(s:string){return s.replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('>','&gt;').replaceAll('"','&quot;').replaceAll("'",'&apos;')}
@@ -16,7 +18,7 @@ export function serviceDefinition(platform:string,home:string,node:string,entry:
  const marker='Managed by moremote-cli; per-user ownership v1; owner='+createHash('sha256').update(data).digest('hex');
  if(platform==='darwin')return {platform,entry,path:join(home,'Library','LaunchAgents','com.moremote.cli.plist'),content:'<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd"><plist version="1.0"><dict><key>Label</key><string>com.moremote.cli</string><key>Description</key><string>'+marker+'</string><key>ProgramArguments</key><array>'+[node,entry,'run','--data-dir',data].map(s=>'<string>'+xml(s)+'</string>').join('')+'</array><key>RunAtLoad</key><true/><key>KeepAlive</key><true/><key>AbandonProcessGroup</key><true/><key>ProcessType</key><string>Background</string></dict></plist>\n'};
  if(platform==='linux')return {platform,entry,path:join(process.env.XDG_CONFIG_HOME||join(home,'.config'),'systemd','user','moremote-cli.service'),content:'[Unit]\nDescription='+marker+'\n[Service]\nExecStart='+[node,entry,'run','--data-dir',data].map(systemd).join(' ')+'\nKillMode=process\nRestart=on-failure\nRestartSec=5\n[Install]\nWantedBy=default.target\n'};
- if(platform==='win32')return {platform,entry,path:join(data,'moremote-cli-task.xml'),content:'<?xml version="1.0" encoding="UTF-16"?><Task version="1.2" xmlns="http://schemas.microsoft.com/windows/2004/02/mit/task"><RegistrationInfo><Description>'+marker+'</Description></RegistrationInfo><Triggers><LogonTrigger><UserId>'+xml(userInfo().username)+'</UserId><Enabled>true</Enabled></LogonTrigger></Triggers><Principals><Principal id="CurrentUser"><UserId>'+xml(userInfo().username)+'</UserId><LogonType>InteractiveToken</LogonType><RunLevel>LeastPrivilege</RunLevel></Principal></Principals><Settings><MultipleInstancesPolicy>IgnoreNew</MultipleInstancesPolicy><ExecutionTimeLimit>PT0S</ExecutionTimeLimit><Enabled>true</Enabled></Settings><Actions Context="CurrentUser"><Exec><Command>'+xml(node)+'</Command><Arguments>'+xml([entry,'run','--data-dir',data].map(windowsArg).join(' '))+'</Arguments></Exec></Actions></Task>'};
+ if(platform==='win32')return {platform,entry,path:join(data,'moremote-cli-task.xml'),content:'<?xml version="1.0" encoding="UTF-16"?><Task version="1.2" xmlns="http://schemas.microsoft.com/windows/2004/02/mit/task"><RegistrationInfo><Description>'+marker+'</Description></RegistrationInfo><Triggers><LogonTrigger><UserId>'+xml(userInfo().username)+'</UserId><Enabled>true</Enabled></LogonTrigger></Triggers><Principals><Principal id="CurrentUser"><UserId>'+xml(userInfo().username)+'</UserId><LogonType>InteractiveToken</LogonType><RunLevel>LeastPrivilege</RunLevel></Principal></Principals><Settings><MultipleInstancesPolicy>IgnoreNew</MultipleInstancesPolicy>'+windowsLoginRecoverySettings+'<ExecutionTimeLimit>PT0S</ExecutionTimeLimit><Enabled>true</Enabled></Settings><Actions Context="CurrentUser"><Exec><Command>'+xml(node)+'</Command><Arguments>'+xml([entry,'run','--data-dir',data].map(windowsArg).join(' '))+'</Arguments></Exec></Actions></Task>'};
  throw Error('UNSUPPORTED_SERVICE_PLATFORM');
 }
 class CommandFailure extends Error{
@@ -92,6 +94,35 @@ async function registration(def:ServiceDefinition,content:string|undefined):Prom
  }else throw Error('UNSUPPORTED_SERVICE_PLATFORM');
  return 'registered';
 }
+async function withWindowsTaskLock<T>(def:ServiceDefinition,work:()=>Promise<T>):Promise<T>{
+ if(def.platform!=='win32'||process.platform!=='win32'||!await ownedFile(def))return work();
+ const dir=dirname(def.path);
+ await privateManagedDirectory(join(dir,'managed'));
+ for(let attempt=0;;attempt++){
+  try{return await updateLock(dir,work,'windows-task')}
+  catch(error){
+   if(attempt>=32||!(error instanceof Error)||error.message!=='UPDATE_BUSY')throw error;
+   await sleep(250);
+  }
+ }
+}
+export async function migrateWindowsLoginRecovery(def:ServiceDefinition):Promise<void>{
+ if(def.platform!=='win32')return;
+ await withWindowsTaskLock(def,async()=>{
+  const file=await ownedFile(def);
+  if(!file)return;
+  const executable=xmlValue(file.content,'Command'),args=xmlValue(file.content,'Arguments');
+  if(!executable||!args)return;
+  const legacy=def.content.replace(windowsLoginRecoverySettings,'')
+   .replace(/<Command>.*?<\/Command>/,()=>'<Command>'+xml(executable)+'</Command>')
+   .replace(/<Arguments>.*?<\/Arguments>/,()=>'<Arguments>'+xml(args)+'</Arguments>');
+  if(file.content!==legacy)return;
+  // Compare the live definition with Task Scheduler's own normalization of
+  // the original template. Recheck that same registration at the write boundary.
+  const script=windowsLoginRecoveryMigration(legacy);
+  await command('powershell.exe',['-NoProfile','-NonInteractive','-EncodedCommand',Buffer.from(script,'utf16le').toString('base64')],true,8000);
+ });
+}
 export async function serviceStatus(def:ServiceDefinition):Promise<ServiceStatus>{
  const file=await ownedFile(def);
  try{return {owned:!!file,registration:await registration(def,file?.content)}}
@@ -136,10 +167,13 @@ async function registerWindowsService(def:ServiceDefinition){
  // Never leave the native-import copy present when the retained runtime starts.
  await command('schtasks',['/Run','/TN',taskName]);
 }
-export async function installService(def:ServiceDefinition):Promise<ServiceInstallResult>{
+export function installService(def:ServiceDefinition):Promise<ServiceInstallResult>{
+ return withWindowsTaskLock(def,()=>installRegistration(def));
+}
+async function installRegistration(def:ServiceDefinition):Promise<ServiceInstallResult>{
  const status=await serviceStatus(def);requireKnown(status);
  await access(def.entry);
- if(status.registration==='registered')await stopService(def);
+ if(status.registration==='registered')await stopRegistration(def);
  await writeDefinition(def);
  if(def.platform==='darwin'){await command('launchctl',['bootstrap','gui/'+process.getuid!(),def.path]);return {lingerEnabled:null}}
  if(def.platform==='linux'){
@@ -154,18 +188,24 @@ export async function installService(def:ServiceDefinition):Promise<ServiceInsta
  }
  await registerWindowsService(def);return {lingerEnabled:null};
 }
-export async function stopService(def:ServiceDefinition){
+export function stopService(def:ServiceDefinition):Promise<void>{
+ return withWindowsTaskLock(def,()=>stopRegistration(def));
+}
+async function stopRegistration(def:ServiceDefinition){
  const status=await serviceStatus(def);requireKnown(status);
  if(status.registration==='absent')return;
  if(def.platform==='darwin')await command('launchctl',['bootout','gui/'+process.getuid!()+'/com.moremote.cli']);
  else if(def.platform==='linux')await command('systemctl',['--user','stop','moremote-cli.service']);
  else await command('schtasks',['/End','/TN',taskName]);
 }
-export async function removeService(def:ServiceDefinition){
+export function removeService(def:ServiceDefinition):Promise<void>{
+ return withWindowsTaskLock(def,()=>removeRegistration(def));
+}
+async function removeRegistration(def:ServiceDefinition){
  const status=await serviceStatus(def);requireKnown(status);
  if(status.registration==='registered'){
   if(def.platform==='linux')await command('systemctl',['--user','disable','--now','moremote-cli.service']);
-  else if(def.platform==='darwin')await stopService(def);
+  else if(def.platform==='darwin')await stopRegistration(def);
   else await command('schtasks',['/Delete','/TN',taskName,'/F']);
  }
  if(!status.owned)return;

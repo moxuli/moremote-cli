@@ -4,8 +4,9 @@ import { spawnSync } from 'node:child_process';
 import { mkdtemp,mkdir,writeFile,readFile,chmod,rm,symlink,lstat } from 'node:fs/promises';
 import { join,dirname,relative } from 'node:path';
 import { tmpdir } from 'node:os';
-import { installService,managedEntry,removeService,serviceDefinition,serviceStatus,stopService,updatePackage } from '../src/service.ts';
+import { installService,managedEntry,migrateWindowsLoginRecovery,removeService,serviceDefinition,serviceStatus,stopService,updatePackage } from '../src/service.ts';
 import type { ServiceDefinition } from '../src/service.ts';
+import { windowsLoginRecoverySettings } from '../src/windows-login-recovery.ts';
 import { assertTaskResource } from '../src/resources.ts';
 import { assertTaskResource as retainedTaskResource } from './fixtures/published-0.1.1-resources.mjs';
 
@@ -244,3 +245,32 @@ process.exit(0);
  }finally{await f.close()}
 });
 
+
+test('Windows login task can run on battery and retries abnormal exits',()=>{
+ const def=serviceDefinition('win32','fixture-home',process.execPath,'fixture-entry','fixture-data');
+ assert.match(def.content,/<LogonTrigger>/);
+ assert.match(def.content,/<LogonType>InteractiveToken<\/LogonType>/);
+ assert.match(def.content,/<DisallowStartIfOnBatteries>false<\/DisallowStartIfOnBatteries>/);
+ assert.match(def.content,/<StopIfGoingOnBatteries>false<\/StopIfGoingOnBatteries>/);
+ assert.match(def.content,/<RestartOnFailure><Interval>PT1M<\/Interval><Count>3<\/Count><\/RestartOnFailure>/);
+});
+
+test('automatic Windows repair only submits an exact legacy ownership definition', executableFixtures, async()=>{
+ const f=await fixture();
+ try{
+  const def=await f.select('win32',true);
+  await migrateWindowsLoginRecovery(def);
+  assert.deepEqual(await f.commands(),[]);
+  const legacy=def.content.replace(windowsLoginRecoverySettings,'');
+  await writeDefinition({...def,content:legacy.replace('<ExecutionTimeLimit>PT0S','<ExecutionTimeLimit>PT1H')});
+  await migrateWindowsLoginRecovery(def);
+  assert.deepEqual(await f.commands(),[]);
+  await writeDefinition({...def,content:legacy});
+  await migrateWindowsLoginRecovery(def);
+  const [call]=await f.commands();
+  assert.equal(call.program,'powershell.exe');
+  assert.deepEqual(call.args.slice(0,3),['-NoProfile','-NonInteractive','-EncodedCommand']);
+  assert.match(Buffer.from(call.args[3],'base64').toString('utf16le'),/RegisterTaskDefinition\('MoRemoteCLI', \$definition, 52,/);
+  assert.equal(await readFile(def.path,'utf16le'),legacy);
+ }finally{await f.close()}
+});

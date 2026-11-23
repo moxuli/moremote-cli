@@ -2,6 +2,7 @@ import { spawn, spawnSync } from 'node:child_process';
 import { accessSync, constants, lstatSync, readFileSync, realpathSync } from 'node:fs';
 import { homedir, uptime } from 'node:os';
 import { delimiter, dirname, join, resolve } from 'node:path';
+import { setTimeout as sleep } from 'node:timers/promises';
 import type { Config } from './config.js';
 
 export interface PaseoLauncher {
@@ -368,6 +369,7 @@ export interface PaseoWatchdogOptions {
 
 export class PaseoWatchdog {
   private hasObservedLiveDaemon = false;
+  private connectedCount = 0;
   private pendingRecoverySince: number | null = null;
   private consecutiveFailures = 0;
   private nextAttemptAt = 0;
@@ -394,12 +396,34 @@ export class PaseoWatchdog {
   }
 
   onConnected(): void {
+    this.connectedCount += 1;
     this.hasObservedLiveDaemon = true;
     this.pendingRecoverySince = null;
     this.consecutiveFailures = 0;
     this.nextAttemptAt = 0;
     this.lastCode = null;
     this.state = 'idle';
+  }
+
+  async monitor(readConfig: () => Promise<Config>, signal: AbortSignal,
+                onStarted: () => void): Promise<void> {
+    while (!signal.aborted) {
+      try {
+        const config = await readConfig();
+        if (!config.target && canManageLocalPaseo(config)) {
+          if (this.isAlive(config.paseoHome, this.clock())) {
+            this.hasObservedLiveDaemon = true;
+            this.pendingRecoverySince = null;
+          } else {
+            const result = await this.ensureAfterConnectFailure(config, { signal });
+            if (result.started && !signal.aborted) onStarted();
+          }
+        }
+      } catch {
+        // A transient configuration read must not terminate the runtime.
+      }
+      await sleep(2000, undefined, { signal }).catch(() => {});
+    }
   }
 
   status(): PaseoWatchdogStatus {
@@ -434,16 +458,17 @@ export class PaseoWatchdog {
       return { attempted: false, started: false, code: this.lastCode };
     }
 
+    const connectedCount = this.connectedCount;
     const result = await this.startDaemon(config.paseoHome, options.signal);
     if (result.ok) {
       this.recoveries += 1;
       this.consecutiveFailures = 0;
       this.nextAttemptAt = this.clock() + this.cooldownMs;
       this.lastCode = null;
-      this.state = 'recovering';
+      if (this.connectedCount === connectedCount) this.state = 'recovering';
       return { attempted: true, started: true, code: null };
     }
-    if (result.code === 'PASEO_START_ABORTED') {
+    if (result.code === 'PASEO_START_ABORTED' || this.connectedCount !== connectedCount) {
       return { attempted: true, started: false, code: result.code };
     }
     this.consecutiveFailures += 1;
