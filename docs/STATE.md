@@ -1,5 +1,24 @@
 # Project state
 
+## Public 0.1.12 — 2026-11-23
+
+Source `b640610617175f0a6f56b5a8eeba88432f387a8e` is public as
+[`v0.1.12`](https://github.com/moxuli/moremote-cli/releases/tag/v0.1.12).
+The [main CI run](https://github.com/moxuli/moremote-cli/actions/runs/45191671652)
+passed on macOS, Ubuntu, and Windows. The
+[release run](https://github.com/moxuli/moremote-cli/actions/runs/45193765835)
+published the tested artifact. The independent readback verified that the
+locally prepared archive, npm tarball, and GitHub assets matched, and an
+isolated installation reported 0.1.12. The 182,586-byte archive has SHA256
+`964091a0c5e23219d4a3e7028f6d93968161399b7ab87ed31ea1da23b182d1cb`.
+The first anonymous npm read returned 404 after the publish receipt. Readback
+succeeded after registry propagation.
+
+This release repairs supported existing Windows login tasks when the updated
+runtime next runs and separates local Paseo recovery from cloud delays.
+The packaged upgrade and rollback smoke passed in isolation. Host-specific
+activation still depends on the existing service configuration.
+
 ## Public 0.1.9 and release operator
 
 Source `3dfb1986db11cbcdb91f00e5656aef5a2fe18aa6` is public as `v0.1.9`.
