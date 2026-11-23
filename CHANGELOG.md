@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.1.12 — 2026-11-23
 
 - Allow the Windows sign-in task to start and continue on battery and retry abnormal exits. Repair the original defaults on an existing enabled owned task when the updated runtime next runs.
 - Keep local Paseo recovery independent of cloud request delays and rate limits while preserving revocation and dispatch ordering.

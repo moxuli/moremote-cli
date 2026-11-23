@@ -3,7 +3,7 @@
 Optional, independent Apache-2.0 computer companion for MoRemote and an **unmodified Paseo 0.15.3** daemon. Existing official-only clients keep working without this project or its cloud.
 
 Canonical repository/command: `moremote-cli`; public npm package:
-**`@moxuli/moremote`** (release **0.1.11**); source entry: `bin/moremote-cli.js`.
+**`@moxuli/moremote`** (release **0.1.12**); source entry: `bin/moremote-cli.js`.
 There is no unscoped npm alias or automatic adoption of foreign/old state.
 
 ## Install the published package
