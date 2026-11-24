@@ -1,5 +1,10 @@
 # Changelog
 
+## Unreleased
+
+- Keep Live Activity completion updates flowing when workspace titles are unavailable. Show a generic title until the verified name arrives.
+- Recover a missed Live Activity turn update from the companion's existing verified Paseo completion read, with turn and subscription checks.
+
 ## 0.1.12 — 2026-11-23
 
 - Allow the Windows sign-in task to start and continue on battery and retry abnormal exits. Repair the original defaults on an existing enabled owned task when the updated runtime next runs.

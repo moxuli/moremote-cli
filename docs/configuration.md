@@ -150,7 +150,8 @@ non-subscribing seeds and retain the broad stream, preserving their connection-w
 subscription slot. Recovery metadata shares a132-row cap; every stop releases
 owners and fences late responses. Phone source hints are at most32 entries and
 4000 UTF-8 JSON bytes, contain IDs/source only, and do not change config, authority
-or cloud cadence. Unknown metadata delays activity only; notifications keep flowing.
+or cloud cadence. When a workspace title is unavailable, its activity uses a
+generic name until verified metadata arrives.
 
 macOS: user Library/LaunchAgents/com.moremote.cli.plist. Linux: XDG_CONFIG_HOME/systemd/user/moremote-cli.service (fallback user .config). Windows: current-user task MoRemoteCLI and UTF-16 XML in CLI state, InteractiveToken/LeastPrivilege; built-in PowerShell checks exact existing task ownership before schtasks mutation. Marker binds the data-directory hash; manager registration/file ownership mismatch fails closed. A private CLI root marker refuses nonempty foreign directories and gates purge. No official Paseo service/resource is altered. Missing managers fail honestly.
 

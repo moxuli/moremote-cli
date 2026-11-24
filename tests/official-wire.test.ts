@@ -274,6 +274,64 @@ for(const ownedSubscriptions of [false,true])test(`real SDK wire (${ownedSubscri
    currentAgent={...currentAgent,requiresAttention:false,attentionReason:null,attentionTimestamp:null};
    await official.snapshot();
   }
+  {
+   const timestamp=base+8000;
+   // Paseo can update its snapshot clock before assigning the attention clock.
+   const finished={...terminal('finished',timestamp),updatedAt:new Date(timestamp-10).toISOString()};
+   const running={...finished,status:'running' as const,updatedAt:new Date(timestamp-100).toISOString(),
+    requiresAttention:false,attentionReason:null,attentionTimestamp:null,
+    activeTurn:{turnId:'synthetic-current-turn',startedAt:new Date(timestamp-1000).toISOString()}};
+   const updateLiveAgent=(state:typeof agent)=>{
+    for(const socket of server.clients)socket.send(JSON.stringify(wrapSessionMessage(SessionOutboundMessageSchema.parse({
+     type:'agent_update',payload:{kind:'upsert',agent:state,...(ownedSubscriptions?{subscriptionId:'synthetic-live-agents'}:{})},
+    }))));
+   };
+   currentAgent=running;official.setLiveActivityEnabled(true);await flushWire();
+   assert.equal(official.liveActivitySnapshot()?.agents[0].status,'running');
+
+   // The attention read sees completion but the owned list misses the upsert.
+   currentAgent=finished;
+   timelineEntries=[];
+   const completed=Promise.withResolvers<Attention>();
+   const off=official.onAttention(event=>{off();completed.resolve(event);});
+   const delayedCompletion=Promise.withResolvers<()=>void>();holdAgentRead=delayedCompletion.resolve;
+   announce('finished',timestamp+4);
+   const releaseCompletion=await bounded(delayedCompletion.promise,2000,'COMPLETION_READ_NOT_STARTED');
+   const staleWaiting=AgentSnapshotPayloadSchema.parse({...running,requiresAttention:true,attentionReason:'permission',
+    pendingPermissions:[{id:'stale-permission',provider:'claude',kind:'tool',name:'Synthetic action',
+     actions:[{id:'allow',label:'Allow',behavior:'allow'}],input:{}}]});
+   updateLiveAgent({...staleWaiting,updatedAt:new Date(timestamp-50).toISOString(),title:'Current live title'});
+   await flushWire();releaseCompletion();
+   assert.equal((await bounded(completed.promise,2000,'COMPLETION_NOT_VERIFIED')).timestamp,timestamp);
+   await Promise.all(publications);
+   assert.equal(official.liveActivitySnapshot()?.agents[0].attentionReason,'finished',
+    'the confirmed terminal read must repair the missing live update');
+   assert.equal(official.liveActivitySnapshot()?.agents[0].title,'Current live title');
+   assert.deepEqual(official.liveActivitySnapshot()?.agents[0].pendingPermissions,[],'a verified newer completion clears the older waiting state');
+   updateLiveAgent(finished);await flushWire();
+   updateLiveAgent(staleWaiting);await flushWire();
+   assert.equal(official.liveActivitySnapshot()?.agents[0].attentionReason,'finished','an older waiting upsert cannot revive a completed turn');
+
+   const next={...running,updatedAt:new Date(timestamp+50).toISOString(),activeTurn:{turnId:'synthetic-next-turn-same-user',startedAt:new Date(timestamp+50).toISOString()}};
+   updateLiveAgent(next);await flushWire();
+   assert.equal(official.liveActivitySnapshot()?.agents[0].activeTurn?.turnId,next.activeTurn.turnId);
+
+   const errorAt=timestamp+500;
+   currentAgent={...terminal('error',errorAt),lastUserMessageAt:running.lastUserMessageAt};
+   const delayed=Promise.withResolvers<()=>void>();holdAgentRead=delayed.resolve;
+   const errored=Promise.withResolvers<Attention>();
+   const offError=official.onAttention(event=>{offError();errored.resolve(event);});
+   announce('error',errorAt+4);
+   const release=await bounded(delayed.promise,2000,'TERMINAL_READ_NOT_STARTED');
+   const newer={...next,updatedAt:new Date(errorAt+20).toISOString(),activeTurn:{turnId:'synthetic-newer-turn',startedAt:new Date(errorAt+20).toISOString()}};
+   updateLiveAgent(newer);await flushWire();
+   release();
+   assert.equal((await bounded(errored.promise,2000,'TERMINAL_READ_NOT_SETTLED')).kind,'error');
+   assert.equal(official.liveActivitySnapshot()?.agents[0].activeTurn?.turnId,newer.activeTurn.turnId,
+    'a verified but delayed terminal read cannot settle a replacement turn');
+   await Promise.all(publications);
+   official.setLiveActivityEnabled(false);
+  }
   stopAttention();
   const admittedId='55555555-5555-4555-8555-555555555555',admissionTime=Date.now();
   const admitted=await sealEnvelope(Buffer.alloc(32,7),{version:1,pairId:pair.pairId,id:admittedId,channel:'command',issuedAt:admissionTime,expiresAt:admissionTime+300000},{type:'send',agentId:agent.id,text:'Synthetic admission, not task completion',messageId:admittedId});

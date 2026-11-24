@@ -126,6 +126,14 @@ the companion resolves current official text, never a cached phone title. Missin
 provenance cannot be inferred from a partial recent directory. Visible shared roots
 deny workspace projection; managed children do not count as independent roots.
 Workspace updates enter the existing semantic event fingerprint, not another
-Worker poll. Unknown workspace metadata delays only activity publication; explicit
-empty official titles fall back to agent text. Same-daemon read recovery retains
-confirmed names until new authority arrives. Disabling releases every read interest.
+Worker poll. Missing workspace metadata uses a generic title while activity
+phases continue publishing. Explicit empty official titles fall back to agent text.
+Same-daemon read recovery retains confirmed names until new authority arrives.
+Disabling releases every read interest.
+
+A terminal occurrence verified by the existing exact official attention read
+can repair a stale running row on the same live subscription. The row must
+still be the turn captured before the read, with matching identity and clocks
+that place it before completion. A newer turn, a more recent update, or a
+replacement subscription takes precedence. This is display-only and adds no official read
+or Worker poll.

@@ -1,5 +1,8 @@
 # Live Activity title provenance — local, unreleased
 
+This historical checkpoint predates the subsequent title and completion
+fallbacks described in [architecture](../specs/01-architecture.md).
+
 ## Root cause and correction
 
 The notification path already resolves App-authorized workspace names, while the

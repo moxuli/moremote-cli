@@ -138,19 +138,24 @@ test('title hints reject unknown fields, duplicates, invalid sources and count/U
  });
 });
 
-test('unknown workspace metadata waits without publishing the raw prompt or replacing exact unknown retries',async()=>{
+test('missing workspace metadata uses a generic title and later recovers the verified title',async()=>{
  await fixture(async publisher=>{
   const info=await interest(1000,[{agentId:agent.id,workspaceId:'workspace-one',source:'workspace'}]);
   const requested:string[]=[];
   const snapshot={daemonServerId:pair.daemonServerId,hostName:'machine',agents:[{...agent,workspaceId:'workspace-one'}],
    workspaces:[],requestWorkspace:(id:string)=>{requested.push(id)}};
-  assert.equal(await publisher.prepare(pair,info,snapshot,1100),undefined);
+  const generic=await publisher.prepare(pair,info,snapshot,1100);assert.ok(generic);
   assert.deepEqual(requested,['workspace-one']);
-  const first=await publisher.prepare(pair,info,{...snapshot,workspaces:[{id:'workspace-one',title:'Confirmed name'}]},1200);assert.ok(first);
-  assert.equal((await openDisplay(first.candidates[0].payload)).state.title,'Confirmed name');
-  assert.deepEqual(await publisher.prepare(pair,info,snapshot,1300),first,'unacknowledged bytes remain immutable');
-  publisher.acknowledge(pair.pairId,registrationId,first.sequence);
-  assert.equal(await publisher.prepare(pair,info,snapshot,1400),undefined,'missing metadata never means a clear');
+  assert.equal((await openDisplay(generic.candidates[0].payload)).state.title,'会话');
+  assert.equal(generic.candidates[0].phase,'running');
+  const recovered={...snapshot,workspaces:[{id:'workspace-one',title:'Confirmed name'}]};
+  assert.deepEqual(await publisher.prepare(pair,info,recovered,1200),generic,'unacknowledged bytes remain immutable');
+  publisher.acknowledge(pair.pairId,registrationId,generic.sequence);
+  const named=await publisher.prepare(pair,info,recovered,1300);assert.ok(named);
+  assert.equal((await openDisplay(named.candidates[0].payload)).state.title,'Confirmed name');
+  assert.equal(named.candidates[0].cycle,generic.candidates[0].cycle);
+  publisher.acknowledge(pair.pairId,registrationId,named.sequence);
+  assert.equal(await publisher.prepare(pair,info,recovered,1400),undefined);
   const cleared=await publisher.prepare(pair,info,{...snapshot,workspaces:[{id:'workspace-one',title:null}]},1500);assert.ok(cleared);
   assert.equal((await openDisplay(cleared.candidates[0].payload)).state.title,agent.title);
  });

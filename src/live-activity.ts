@@ -85,13 +85,11 @@ export class LiveActivityPublisher {
     if (agents.length > 100) throw Error('LIVE_ACTIVITY_CANDIDATE_LIMIT');
     for(const hint of titleHints){
       if(hint.source==='workspace'&&agents.some(agent=>agent.id===hint.agentId&&agent.workspaceId===hint.workspaceId)){
-        try{snapshot.requestWorkspace?.(hint.workspaceId)}catch{/* Metadata reads cannot block attention publication. */}
+        try{snapshot.requestWorkspace?.(hint.workspaceId)}catch{/* Display state can still publish without the title. */}
       }
     }
-    const titles=agents.map(agent=>liveTitle(agent,titleHints,snapshot.agents,snapshot.workspaces??[]));
-    if(titles.some(title=>title===undefined))return;
     const cycles: Record<string, Cycle> = {};
-    const projected = await Promise.all(agents.map(async (agent,index) => {
+    const projected = await Promise.all(agents.map(async agent => {
       if (!identifier(agent.id) || (time(agent.lastUserMessageAt) ?? 0) > now) throw Error('INVALID_LIVE_ACTIVITY_TARGET');
       const lastUserAt = time(agent.lastUserMessageAt) ?? time(agent.createdAt) ?? 0;
       const previous = old?.cycles[agent.id], turnId = agent.activeTurn?.turnId ?? null;
@@ -99,12 +97,13 @@ export class LiveActivityPublisher {
         : tag(key, [interest.hostLifetime, agent.id, lastUserAt, turnId ?? '']);
       cycles[agent.id] = { lastUserAt, turnId, cycle };
       const phase = phaseFor(agent, now);
+      const title = liveTitle(agent, titleHints, snapshot.agents, snapshot.workspaces ?? []) ?? '会话';
       const topic = await presenceTopic(decode(pair.rootKey, 32), pair.pairId, agent.id);
       const eventId = ['waiting', 'finished', 'error'].includes(phase)
         ? tag(key, [cycle, phase, phase === 'waiting' ? canonical(agent.pendingPermissions) : agent.attentionTimestamp ?? '']) : undefined;
       return { topic, cycle, phase, lastUserAt, ...(eventId ? { eventId } : {}),
         state: { version: 1, subscriptionId: interest.subscriptionId, daemonServerId: snapshot.daemonServerId,
-          agentId: agent.id, title: bounded(titles[index]!, 160, 480),
+          agentId: agent.id, title: bounded(title, 160, 480),
           hostName: bounded(interest.hostName ?? snapshot.hostName, 80, 240), phase, startedAt: null,
           requiresAttention: phase === 'waiting', isTerminal: phase === 'finished' || phase === 'error' } };
     }));

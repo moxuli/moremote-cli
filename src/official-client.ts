@@ -86,6 +86,7 @@ export class OfficialClient implements OfficialOperations{
  this.previewLanes[lane]=pending.then(()=>{},()=>{});return pending;
  }
  private readTerminal(event:TerminalAttention,initialAgent?:AgentSnapshotPayload){
+ const recoverLiveTurn=this.liveDirectory.captureTerminalRecovery(event.agentId);
  const read:TerminalRead={event,valid:true,next:null};this.terminalReads.set(event.agentId,read);
  const complete=async(agent:AgentSnapshotPayload|null)=>{
  if(this.terminalReads.get(event.agentId)!==read)return;
@@ -109,6 +110,7 @@ export class OfficialClient implements OfficialOperations{
  const timestamp=this.terminalTimestamp(agent,event);if(timestamp!==null&&agent){
   if(this.terminalPublished.size>=LIMITS.attention&&!this.terminalPublished.has(event.agentId))this.terminalPublished.delete(this.terminalPublished.keys().next().value!);
   this.terminalPublished.set(event.agentId,event.kind+':'+timestamp);
+  recoverLiveTurn?.(agent,event.kind,timestamp);
   this.emit({agentId:event.agentId,kind:event.kind,timestamp,preview:buildNotificationPreview(agent,this.info()?.hostname||hostname(),event.kind,undefined,entries)});
  }
  };
