@@ -1,5 +1,23 @@
 # Project state
 
+## Public 0.1.13 — 2026-11-24
+
+Source `c1e253b2003bbb6ad05b91315446e30fb50d5ea7` is public as
+[`v0.1.13`](https://github.com/moxuli/moremote-cli/releases/tag/v0.1.13).
+The [main CI run](https://github.com/moxuli/moremote-cli/actions/runs/45412373530)
+passed on macOS, Ubuntu, and Windows, including packaged upgrade and rollback.
+The [release run](https://github.com/moxuli/moremote-cli/actions/runs/45415204208)
+published the tested archive. The independent receiver verified that the local,
+npm, and GitHub archives match and installed the public package into an isolated
+prefix, where the frontend reported 0.1.13. The 183,999-byte archive has SHA256
+`57ec5befbbe77e40c7f14ac6725ad9eff0360b997cce56a8545f1fdcb264d89a`.
+The first registry read returned 404 after the hosted publication. The same
+version became readable without changing the tag or retrying publication.
+
+Live Activity candidates can publish with a generic title while metadata is
+unavailable. An already-verified Paseo terminal read can repair a stale row for
+the same turn and subscription. Physical APNs delivery remains unverified.
+
 ## Public 0.1.12 — 2026-11-23
 
 Source `b640610617175f0a6f56b5a8eeba88432f387a8e` is public as
