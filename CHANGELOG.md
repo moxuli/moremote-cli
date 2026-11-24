@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.1.13 — 2026-11-24
 
 - Keep Live Activity completion updates flowing when workspace titles are unavailable. Show a generic title until the verified name arrives.
 - Recover a missed Live Activity turn update from the companion's existing verified Paseo completion read, with turn and subscription checks.
