@@ -1,3 +1,4 @@
+import {isDeepStrictEqual} from 'node:util';
 import type {DaemonClient} from '@getpaseo/client/internal/daemon-client';
 import type {AgentSnapshotPayload} from '@getpaseo/protocol/messages';
 import {LiveWorkspaces} from './live-workspaces.js';
@@ -13,7 +14,7 @@ interface LiveRow {
   terminal?: ConfirmedTerminal;
 }
 
-/** A separately owned read interest, acquired only for an active phone activity. */
+/** A separately owned local directory. Workspace decoration follows an active phone activity. */
 export class LiveDirectory {
   private owner?: ReturnType<DaemonClient['observeAgents']>;
   private detach?: () => void;
@@ -22,10 +23,10 @@ export class LiveDirectory {
   private generation?: string;
   private head = -1;
   private workspaceDirectory:LiveWorkspaces;
-  constructor(private sdk: DaemonClient) {this.workspaceDirectory=new LiveWorkspaces(sdk)}
-  setEnabled(enabled: boolean) {
+  constructor(private sdk: DaemonClient, private changed:()=>void=()=>{}) {this.workspaceDirectory=new LiveWorkspaces(sdk)}
+  setEnabled(enabled: boolean, enrich: boolean = enabled) {
     if (!enabled) { this.stop(); return; }
-    if (this.owner) {this.workspaceDirectory.setEnabled(true);return; }
+    if (this.owner) {this.workspaceDirectory.setEnabled(enrich);return; }
     const owner = this.sdk.observeAgents({page:{limit:100},filter:{includeArchived:false,includeInternal:false},
       sort:[{key:'updated_at',direction:'desc'}],timeout:15000});
     this.owner = owner;
@@ -36,6 +37,7 @@ export class LiveDirectory {
         this.generation = value.sync?.generation; this.head = value.sync?.headSeq ?? -1;
         for (const {agent} of value.entries.slice(0,100)) this.rows.set(agent.id, {agent});
         this.ready = true;
+        this.changed();
       },
       update: message => {
         if (this.owner !== owner || !this.ready || message.type !== 'agent_update') return;
@@ -45,11 +47,12 @@ export class LiveDirectory {
         if (value.seq !== undefined && value.seq <= this.head) return;
         if (value.seq !== undefined) this.head=value.seq;
         if (value.kind === 'remove' || value.agent.archivedAt || value.agent.internal) {
-          this.rows.delete(id);
+          if(this.rows.delete(id))this.changed();
           return;
         }
         const agent = value.agent, row = this.rows.get(id), confirmed = row?.terminal;
         if (confirmed && precedesCompletion(agent, confirmed)) return;
+        const needsUpdate=!row||!isDeepStrictEqual(displayState(row.agent),displayState(agent));
         const terminal = confirmed && sameAnchor(agent, confirmed) && !active(agent) ? confirmed : undefined;
         if (row && sameAnchor(row.agent, agent) && row.agent.activeTurn?.turnId === agent.activeTurn?.turnId) {
           row.agent = agent;
@@ -63,11 +66,12 @@ export class LiveDirectory {
             Number(active(b.agent))-Number(active(a.agent)) || b.agent.updatedAt.localeCompare(a.agent.updatedAt));
           this.rows = new Map(ranked.slice(0,100).map(row => [row.agent.id, row]));
         }
+        if(needsUpdate)this.changed();
       },
       error: () => { if (this.owner === owner) this.stop(); },
     });
     void owner.ready.catch(() => { if (this.owner === owner) this.stop(); });
-    this.workspaceDirectory.setEnabled(true);
+    this.workspaceDirectory.setEnabled(enrich);
   }
   // The notification path already verifies an exact terminal snapshot. Use it
   // only while the same live subscription still holds the turn it observed
@@ -90,6 +94,7 @@ export class LiveDirectory {
       row.terminal = evidence;
       row.agent = {...agent, status:completed.status, activeTurn:null, pendingPermissions:completed.pendingPermissions,
         requiresAttention:true, attentionReason:kind, attentionTimestamp:completed.attentionTimestamp, updatedAt:completed.updatedAt};
+      this.changed();
     };
   }
   snapshot(): AgentSnapshotPayload[] | null { return this.ready ? structuredClone([...this.rows.values()].map(row => row.agent)) : null; }
@@ -101,6 +106,11 @@ export class LiveDirectory {
     this.rows.clear(); this.ready = false; this.generation = undefined; this.head = -1;
     void owner?.release().catch(()=>{});
   }
+}
+function displayState(agent:AgentSnapshotPayload){
+  return [agent.status,agent.title,agent.workspaceId,agent.lastUserMessageAt,agent.activeTurn?.turnId,
+    agent.requiresAttention,agent.attentionReason,agent.attentionTimestamp,
+    (agent.pendingPermissions??[]).map(request=>[request.id,request.kind])];
 }
 function active(agent: AgentSnapshotPayload) { return !!agent.activeTurn || agent.pendingPermissions.length > 0 || ['running','initializing'].includes(agent.status); }
 

@@ -428,15 +428,19 @@ response names, attempt/registration fences, uncertain outcomes, categories and
 reply/current-request validation are unchanged. New apps can label legacy alerts
 from authenticated local cache; old apps retain the safe localized alert fallback.
 
-## Remote activity v2 (unreleased)
+## Remote activity v2
 
 Only the authenticated phone may PUT `/pairs/:id/live-activity` with
 subscriptionId, generation, monotonic client revision, activity token/environment,
 startedAt, deadline, encrypted interest and a32byte aggregate membership capability.
 DELETE takes `{revision}` and cannot retire a newer registration. Interest is
 bounded to8KiB and8hours; the separate local rendering seed never enters cloud.
-The existing host controls response passively includes registrationId/interest
-and `x-moremote-live-activity:2`; no capability probe is added.
+For delivery work the authenticated host may GET `/pairs/:id/live-activity`.
+It returns `liveActivity: null` or the unexpired, current
+`{registrationId,interest}`, with `x-moremote-live-activity:2`. The
+phone's APNs token remains on the relay. Legacy controls still include the same
+descriptor during the compatibility window. No recurring empty queue or
+registration reads are made by the current companion.
 
 Host POST `/pairs/:id/events` takes `{attention:[...],activity?:contribution}`.
 This route and its private publish hop alone allow512KiB; other requests remain

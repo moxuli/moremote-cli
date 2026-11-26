@@ -61,3 +61,25 @@ for(const invalid of [
  const client=new CloudClient('http://localhost:18787',pairId,'synthetic',true,fetcher,undefined,{},{});
  await assert.rejects(client.commands());await assert.rejects(client.controls());assert.equal(calls,1);
 });
+
+test('an exact pair-only quota pause preserves same-origin peers and recovery',async()=>{
+ const other='22222222-2222-4222-8222-222222222222',origin='http://localhost:18787';
+ const calls:string[]=[],reset=Date.now()+60000;
+ const fetcher:typeof fetch=async(input)=>{
+  const path=new URL(String(input)).pathname;calls.push(path);
+  if(path.includes(pairId)&&path.endsWith('/live-activity'))return Response.json({ok:false,error:{code:'pair_daily_work_limit'}},{
+   status:429,headers:{'retry-after':'60','x-moremote-limit-scope':'pair',
+    'x-moremote-pair-budget':'normal','x-moremote-reset':String(reset)},
+  });
+  return Response.json({ok:true,liveActivity:null});
+ };
+ const shared={},cycle={},pairState={};
+ const first=new CloudClient(origin,pairId,'synthetic',true,fetcher,undefined,shared,cycle,pairState);
+ const next=new CloudClient(origin,pairId,'synthetic',true,fetcher,undefined,shared,{},pairState);
+ const second=new CloudClient(origin,other,'synthetic',true,fetcher,undefined,shared,cycle,{});
+ await assert.rejects(first.discoverLiveActivity(),{message:'PAIR_DAILY_WORK_LIMIT'});
+ await assert.rejects(next.discoverLiveActivity(),{message:'PAIR_DAILY_WORK_LIMIT'});
+ await first.resolveAttention(other,Date.now());
+ await second.discoverLiveActivity();
+ assert.equal(calls.length,3);
+});

@@ -18,6 +18,7 @@ export async function publishEvents(pair:Pair, cloud:CloudClient, journal:Operat
     return;
   }
   let failure:unknown;
+  let registrationChanged=false;
   const activity=cloud.liveActivityInterest&&snapshot
     ? await publisher.prepare(pair,cloud.liveActivityInterest,snapshot).catch(error=>{failure=error;return undefined}) : undefined;
   // Never let an oversize optional display update block the notification outbox.
@@ -33,11 +34,15 @@ export async function publishEvents(pair:Pair, cloud:CloudClient, journal:Operat
     for(const item of batch)if(result.attention.has(item.id))journal.attentionSent(pair.pairId,item.id);else failure=Error('ATTENTION_NOT_ACCEPTED');
     if(live){
       if(result.activity)publisher.acknowledge(pair.pairId,live.registrationId,live.sequence);
-      else if(['live_activity_not_registered','live_activity_retired','live_activity_generation_changed'].includes(result.activityCode??''))publisher.stop(pair.pairId,live.registrationId,live.sequence);
+      else if(['live_activity_not_registered','live_activity_retired','live_activity_generation_changed'].includes(result.activityCode??'')){
+        publisher.stop(pair.pairId,live.registrationId,live.sequence);
+        registrationChanged=true;
+      }
       else failure=Error('LIVE_ACTIVITY_NOT_ACCEPTED');
     }
   }
   // A single large legacy notification can still use its original bounded route.
   if(pending.length&&!batch.length){await cloud.attention(pending[0].body);journal.attentionSent(pair.pairId,pending[0].id)}
   if(failure)throw failure;
+  return registrationChanged;
 }

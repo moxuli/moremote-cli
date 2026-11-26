@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.1.14 — 2026-11-27
+
+- Deliver notifications and encrypted Live Activity updates from local Paseo observations. Idle paired hosts no longer read cloud command or control queues.
+- Look up a Live Activity registration only when there is delivery work. Pair-scoped quota pauses leave other paired devices available.
+- Route notification actions to the conversation on the phone. Preserve receipt reconciliation for operations already attempted by previous versions.
+
 ## 0.1.13 — 2026-11-24
 
 - Keep Live Activity completion updates flowing when workspace titles are unavailable. Show a generic title until the verified name arrives.

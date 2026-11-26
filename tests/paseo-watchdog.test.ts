@@ -12,6 +12,8 @@ import { WebSocketServer } from 'ws';
 import { wrapSessionMessage } from '@getpaseo/protocol/messages';
 import { saveConfig, type Config } from '../src/config.ts';
 import { makeOffer } from '../src/pairing.ts';
+import { OperationJournal } from '../src/journal.ts';
+import { sealEnvelope, decode } from '../src/crypto.ts';
 import { requestControl, controlEndpoint } from '../src/control.ts';
 import {
   PaseoWatchdog,
@@ -382,7 +384,7 @@ test('real runRuntime starts Paseo while the cloud is blocked and self-heals aft
     waitingForCloud = true;
     await cloudGate;
     response.writeHead(200, { 'content-type': 'application/json' })
-      .end(JSON.stringify({ ok: true, controls: [], commands: [] }));
+      .end(JSON.stringify({ ok: true }));
   });
   cloud.listen(0, '127.0.0.1');
   await once(cloud, 'listening');
@@ -410,7 +412,7 @@ test('real runRuntime starts Paseo while the cloud is blocked and self-heals aft
       } else if (f.type === 'session') {
         const m = f.message;
         if (m.type === 'session.events.set_subscription.request') reply({ type: 'session.events.set_subscription.response', payload: { requestId: m.requestId, subscriptionId: 's1' } });
-        else if (m.type === 'fetch_agents_request') reply({ type: 'fetch_agents_response', payload: { requestId: m.requestId, entries: [], pageInfo: { nextCursor: null, prevCursor: null, hasMore: false } } });
+        else if (m.type === 'fetch_agents_request') reply({ type: 'fetch_agents_response', payload: { requestId: m.requestId, ...(m.subscribe ? { subscriptionId: 'agents' } : {}), entries: [], pageInfo: { nextCursor: null, prevCursor: null, hasMore: false } } });
         else if (m.type === 'subscription.release.request') reply({ type: 'subscription.release.response', payload: { requestId: m.requestId } });
       }
     });
@@ -452,6 +454,19 @@ writeFileSync(${JSON.stringify(join(paseoHome, 'paseo.pid'))}, JSON.stringify({ 
     await saveConfig(dir, baseConfig(paseoHome, {
       daemonServerId: 'srv_watchdog_e2e', cloudEnabled: true, allowLoopbackHttp: true, apiOrigin, pairs: [pair],
     }));
+    // Previously executed durable work can require HTTP before the daemon is available.
+    const journal = new OperationJournal(join(dir, 'journal.sqlite'));
+    try {
+      const id = '11111111-1111-4111-8111-111111111111', issuedAt = Date.now();
+      const key = decode(pair.rootKey, 32);
+      journal.prepare(await sealEnvelope(key, { version: 1, pairId: pair.pairId, id,
+        channel: 'command', issuedAt, expiresAt: issuedAt + 300000 },
+        { type: 'send', agentId: 'synthetic', messageId: id, text: 'already executed' }));
+      journal.dispatched(pair.pairId, id);
+      journal.outcome(pair.pairId, id, 'accepted', await sealEnvelope(key, {
+        version: 1, pairId: pair.pairId, id, channel: 'receipt', issuedAt, expiresAt: issuedAt + 600000,
+      }, { operationId: id, state: 'accepted', revision: 1 }));
+    } finally { journal.close(); }
     assert.ok(Buffer.byteLength(controlEndpoint(dir)) < 100 || process.platform === 'win32');
     allowConnect = true;
     child = spawn(process.execPath, ['--import', 'tsx', '--input-type=module', '--eval', "import { runRuntime } from './src/runtime.ts'; await runRuntime(process.argv[1]); process.disconnect?.();", dir], {

@@ -7,9 +7,9 @@ import {OfficialClient,type Attention} from './official-client.js';
 import {CloudClient,CloudError,type CloudRetryState} from './cloud-client.js';
 import {sealEnvelope,decode,presenceTopic} from './crypto.js';
 import {OperationJournal,type Occurrence} from './journal.js';
-import {executeOperation,reconcileJournal} from './operations.js';
+import {reconcileJournal} from './operations.js';
 import {activatePending} from './pairing.js';
-import {processControl,retransmitControls} from './controls.js';
+import {retransmitControls} from './controls.js';
 import {occurrenceBinding} from './bindings.js';
 import {projectSnapshot} from './projection.js';
 import {ownRuntime} from './control.js';
@@ -17,7 +17,7 @@ import {LIMITS,object} from './limits.js';
 import {NotificationStatePublisher} from './notification-state.js';
 import {LocalEnrollment} from './local-enrollment.js';
 import {inspectResource} from './resources.js';
-import {LiveActivityPublisher} from './live-activity.js';
+import {LiveActivityPublisher,liveObservation,type LiveInterest} from './live-activity.js';
 import {publishEvents} from './event-publication.js';
 import {encryptNotificationPreview} from './notification-preview.js';
 import {PaseoWatchdog} from './paseo-watchdog.js';
@@ -60,7 +60,7 @@ export async function runRuntime(dir:string,version?:string){
  const parentGone=()=>{draining=true;drainWake.abort()};
  let detach:(()=>void)|undefined,closeJournal:(()=>void)|undefined,watchdogTask:Promise<void>|undefined;
  const watchdog=new PaseoWatchdog();
- let recoveryRevision=0,localRetryWake:AbortController|undefined;
+ let displayRevision=0,recoveryRevision=0,localRetryWake:AbortController|undefined,eventWake:AbortController|undefined;
  const release=await ownRuntime(dir,()=>({stage,lastError,activePairs,version:version??null,paseoWatchdog:watchdog.status()}),stop);
  const enrollment=new LocalEnrollment(dir);
  try{
@@ -69,7 +69,9 @@ export async function runRuntime(dir:string,version?:string){
  if(process.send){process.on('message',parentMessage);process.on('disconnect',parentGone);if(!process.connected)parentGone();else process.send({kind:'moremote-ready'},undefined,undefined,()=>{})}
  const attentionQueue:Attention[]=[];let backoff:number=LIMITS.pollMs;let measuredAt=0;let snapshot:Awaited<ReturnType<OfficialClient['snapshot']>>|undefined;
  const statePublisher=new NotificationStatePublisher();const livePublisher=new LiveActivityPublisher(journal);
- const retryStates=new Map<string,CloudRetryState>();const pollOrigins=new Set<string>();
+ const historicalRecoveryAt=new Map<string,number>();
+ const displays=new Map<string,{key:string|undefined;sent:string|undefined;interest:LiveInterest|undefined;previews:boolean;v2:boolean}>();
+ const retryStates=new Map<string,CloudRetryState>(),pairRetries=new Map<string,CloudRetryState>();const pollOrigins=new Set<string>();
  process.once('SIGINT',stop);process.once('SIGTERM',stop);
  // This lane only starts the local daemon. Relay control and mutation admission
  // stay in the existing ordered cycle, even if the relay is offline or paused.
@@ -81,7 +83,7 @@ export async function runRuntime(dir:string,version?:string){
  }
 
  while(!stopped&&!draining){
- const issuedRecovery=recoveryRevision;
+ const issuedRecovery=recoveryRevision;let observedDisplayRevision=displayRevision;
  let openingOfficial=false;
  try{
  const now=Date.now();journal.cleanup(now);const config=await loadConfig(dir);pollOrigins.clear();let failure:unknown;let acquisitionFailed=false;const clouds=new Map<string,CloudClient>();const cycleFences=new Map<string,CloudRetryState>();
@@ -91,64 +93,119 @@ export async function runRuntime(dir:string,version?:string){
  if(pruneRetiredPairs(config,now,journal))await saveConfig(dir,config);journal.cleanupRevocations(config.pairs.map(p=>p.pairId),now);
  statePublisher.retain(config.cloudEnabled?config.pairs.filter(pair=>pair.active&&pair.relayRetiredAt===undefined&&!journal.pairRevoked(pair.pairId)).map(pair=>pair.pairId):[]);
  for(const origin of retryStates.keys())if(!config.pairs.some(pair=>(pair.apiOrigin||config.apiOrigin)===origin))retryStates.delete(origin);
- // Endpoint revocation must work even when the official daemon is offline.
- if(config.cloudEnabled)for(const pair of config.pairs){if(stopped)break;const origin=pair.apiOrigin||config.apiOrigin;if(!origin||(!pair.active&&pair.revokedAt===undefined&&pair.relayRetiredAt===undefined&&pair.expiresAt!==undefined&&pair.expiresAt<=Date.now()))continue;
- if(config.enrollmentRequests?.some(record=>record.pairId===pair.pairId&&!record.created))continue;
- pollOrigins.add(origin);let retryState=retryStates.get(origin);if(!retryState){retryState={};retryStates.set(origin,retryState)}
- let cycleFence=cycleFences.get(origin);if(!cycleFence){cycleFence={};cycleFences.set(origin,cycleFence)}
- const cloud=new CloudClient(origin,pair.pairId,pair.hostToken,config.allowLoopbackHttp,fetch,controller.signal,retryState,cycleFence);let controlsVerified=true;
- // Pending endpoints cannot use active-only control routes. Admit activation
- // after official identity verification, without granting an execution lane.
- if(!pair.active&&pair.revokedAt===undefined&&pair.relayRetiredAt===undefined&&!journal.pairRevoked(pair.pairId)){clouds.set(pair.pairId,cloud);continue}
- try{for(const envelope of await cloud.controls()){try{const state=await processControl({pair,journal,cloud},envelope);if(state==='revoked'){pair.active=false;pair.revokedAt??=journal.revocationTime(pair.pairId)??Date.now();await saveConfig(dir,config)}}catch(error){failure=error;controlsVerified=false;if(!retryPaused(error))acquisitionFailed=true}}}
- catch(error){failure=error;if(!await observeRelayRetirement(config,dir,pair,cloud,error)){if(!retryPaused(error))acquisitionFailed=true;continue}}
- if(controlsVerified||journal.pairRevoked(pair.pairId)||pair.relayRetiredAt!==undefined)clouds.set(pair.pairId,cloud);
- try{await retransmitControls({pair,journal,cloud})}catch(error){failure=error}
- for(const record of journal.receipts(pair.pairId,Date.now())){try{await cloud.receipt(record.id,{state:record.state as 'accepted'|'resolved'|'rejected'|'unknown',revision:record.revision,envelope:record.receipt!});journal.receiptSent(pair.pairId,record.id,record.revision)}catch(error){failure=error}}
- if(pair.active&&!journal.pairRevoked(pair.pairId))try{await publishResolutions(journal,pair,cloud)}catch(error){failure=error}
+ // Construct authenticated clients without reading empty command/control queues.
+ if(config.cloudEnabled)for(const pair of config.pairs){
+  const origin=pair.apiOrigin||config.apiOrigin;
+  if(!origin)continue;
+  const retired=pair.relayRetiredAt!==undefined||pair.revokedAt!==undefined||journal.pairRevoked(pair.pairId);
+  const receipts=journal.receipts(pair.pairId,now);
+  if(retired&&((historicalRecoveryAt.get(pair.pairId)??0)>now||
+   !receipts.length&&!journal.controlReceipts(pair.pairId,now).length&&
+   !journal.pending(pair.pairId).some(record=>record.state!=='prepared')))continue;
+  if(!retired&&!pair.active&&pair.expiresAt!==undefined&&pair.expiresAt<=now)continue;
+  if(config.enrollmentRequests?.some(record=>record.pairId===pair.pairId&&!record.created))continue;
+  pollOrigins.add(origin);let retryState=retryStates.get(origin);if(!retryState){retryState={};retryStates.set(origin,retryState)}
+  let cycleFence=cycleFences.get(origin);if(!cycleFence){cycleFence={};cycleFences.set(origin,cycleFence)}
+  let pairRetry=pairRetries.get(pair.pairId);if(!pairRetry){pairRetry={};pairRetries.set(pair.pairId,pairRetry)}
+  const cloud=new CloudClient(origin,pair.pairId,pair.hostToken,config.allowLoopbackHttp,fetch,controller.signal,retryState,cycleFence,pairRetry);
+  clouds.set(pair.pairId,cloud);
+  try{await retransmitControls({pair,journal,cloud})}catch(error){failure=error}
+  for(const record of receipts){
+   try{
+    await cloud.receipt(record.id,{state:record.state as 'accepted'|'resolved'|'rejected'|'unknown',revision:record.revision,envelope:record.receipt!});
+    journal.receiptSent(pair.pairId,record.id,record.revision);
+   }catch(error){failure=error;if(await observeRelayRetirement(config,dir,pair,cloud,error))break;}
+  }
+  if(retired||pair.relayRetiredAt!==undefined)historicalRecoveryAt.set(pair.pairId,now+60000);
  }
+ for(const id of historicalRecoveryAt.keys())if(!config.pairs.some(pair=>pair.pairId===id))historicalRecoveryAt.delete(id);
+ for(const id of displays.keys())if(!clouds.has(id))displays.delete(id);
+ for(const id of pairRetries.keys())if(!clouds.has(id))pairRetries.delete(id);
  if(stopped)break;
- if(!official||!official.sdk.isConnected){openingOfficial=true;detach?.();await official?.close().catch(()=>{});stage='connecting';const client=new OfficialClient(config,journal);try{await client.connect();official=client}catch(error){await client.close().catch(()=>{});throw error}openingOfficial=false;watchdog.onConnected();const serverId=official.info()!.serverId;if(!config.daemonServerId){config.daemonServerId=serverId;await saveConfig(dir,config)}detach=official.onAttention(event=>{if(attentionQueue.length<500)attentionQueue.push(event);else lastError='ATTENTION_QUEUE_LIMIT'});measuredAt=0;}
- official.setLiveActivityEnabled(config.cloudEnabled&&config.pairs.some(pair=>pair.active&&!journal.pairRevoked(pair.pairId)&&!!clouds.get(pair.pairId)?.liveActivityInterest));
+ if(!official||!official.sdk.isConnected){openingOfficial=true;detach?.();await official?.close().catch(()=>{});stage='connecting';const client=new OfficialClient(config,journal,()=>{displayRevision++;eventWake?.abort()});try{await client.connect();official=client}catch(error){await client.close().catch(()=>{});throw error}openingOfficial=false;watchdog.onConnected();const serverId=official.info()!.serverId;if(!config.daemonServerId){config.daemonServerId=serverId;await saveConfig(dir,config)}detach=official.onAttention(event=>{if(attentionQueue.length<500){attentionQueue.push(event);eventWake?.abort()}else lastError='ATTENTION_QUEUE_LIMIT'});measuredAt=0;}
+ official.setLiveActivityEnabled(config.cloudEnabled&&config.pairs.some(pair=>pair.active&&!journal.pairRevoked(pair.pairId)&&clouds.has(pair.pairId)),
+  [...displays.values()].some(display=>!!display.interest&&display.interest.interest.expiresAt>now));
  try{await enrollment.cycle(config,official.info()!.serverId,pair=>{
   const origin=pair.apiOrigin||config.apiOrigin!;pollOrigins.add(origin);
   let retry=retryStates.get(origin);if(!retry){retry={};retryStates.set(origin,retry)}
   let fence=cycleFences.get(origin);if(!fence){fence={};cycleFences.set(origin,fence)}
-  return new CloudClient(origin,pair.pairId,pair.hostToken,config.allowLoopbackHttp,fetch,controller.signal,retry,fence);
+  return new CloudClient(origin,pair.pairId,pair.hostToken,config.allowLoopbackHttp,fetch,controller.signal,retry,fence,pairRetries.get(pair.pairId));
  })}catch(error){failure=error}
  if(snapshot===undefined||Date.now()-measuredAt>=30000){snapshot=await official.snapshot();measuredAt=snapshot.measuredAt}
  stage=config.cloudEnabled?'cloud-enabled':'local-only';activePairs=config.pairs.filter(p=>p.active&&p.relayRetiredAt===undefined&&!journal.pairRevoked(p.pairId)).length;const events=attentionQueue.splice(0);
+ observedDisplayRevision=displayRevision;
+ const liveSnapshot=official.liveActivitySnapshot(), observation=liveObservation(liveSnapshot,Date.now());
  // Persist every active phone's events before the first network send.
- if(config.cloudEnabled)for(const pair of config.pairs.filter(p=>p.active&&p.relayRetiredAt===undefined&&!journal.pairRevoked(p.pairId)))for(const event of events){const bound=await boundAttention(journal,pair,event,official);if(bound)await queueAttention(journal,pair,bound,Date.now(),clouds.get(pair.pairId)?.notificationPreviews===true)}
+ if(config.cloudEnabled)for(const pair of config.pairs.filter(p=>p.active&&p.relayRetiredAt===undefined&&!journal.pairRevoked(p.pairId)))for(const event of events){const bound=await boundAttention(journal,pair,event,official);if(bound)await queueAttention(journal,pair,bound,Date.now(),displays.get(pair.pairId)?.previews!==false)}
  for(const pair of config.pairs){if(stopped)break;const cloud=clouds.get(pair.pairId);if(!cloud||cycleFences.get(cloud.origin)?.error)continue;try{
  if(pair.daemonServerId&&pair.daemonServerId!==official.info()!.serverId){if(journal.pairRevoked(pair.pairId)||pair.relayRetiredAt!==undefined)continue;throw Error('PAIR_DAEMON_MISMATCH')}
- // A new activation gets no commands/state in this cycle. The next cycle must
- // acquire and validate controls before it can execute any phone operation.
- if(!pair.active&&pair.revokedAt===undefined&&pair.relayRetiredAt===undefined&&!journal.pairRevoked(pair.pairId)){await activatePending(config,dir,pair,cloud,official.info()!.serverId,snapshot.hostName);continue}
- // Read-only reconciliation remains available after revoke and original message expiry.
+ // Pairing and recovery concern explicit pending work. Neither can dispatch a new cloud command.
+ if(!pair.active&&pair.revokedAt===undefined&&!journal.pairRevoked(pair.pairId)){
+  await activatePending(config,dir,pair,cloud,official.info()!.serverId,snapshot.hostName);continue;
+ }
  if(await reconcileJournal({pair,journal,official,cloud,clock:Date.now}))failure=Error('RECEIPT_RECONCILIATION_FAILED');
- if(journal.pairRevoked(pair.pairId)||pair.relayRetiredAt!==undefined)continue;
- const active=await activatePending(config,dir,pair,cloud,official.info()!.serverId,snapshot.hostName);if(!active)continue;
+ if(pair.relayRetiredAt!==undefined||journal.pairRevoked(pair.pairId)||!pair.active)continue;
+ const pending=journal.attention(pair.pairId,now).length>0;
+ let display=displays.get(pair.pairId);
+ const known=display?.interest, expired=known!==undefined&&known.interest.expiresAt<=now;
+ if((pending&&!display)||(observation&&(observation.present||known)&&observation.key!==display?.key)){
+  try{
+   await cloud.discoverLiveActivity();
+   display={key:observation?.key,sent:undefined,interest:cloud.liveActivityInterest,previews:cloud.notificationPreviews,v2:cloud.liveActivityV2};
+   displays.set(pair.pairId,display);
+  }catch(error){
+   // Prior Workers return a route-level 404. Continue sending ordinary alerts
+   // during a rollback, without reviving the periodic acquisition paths.
+   if(error instanceof CloudError&&error.status===404&&error.relayCode==='route_not_found'){
+    display={key:observation?.key,sent:undefined,interest:undefined,previews:false,v2:false};
+    displays.set(pair.pairId,display);
+   }else{
+    failure=error;if(await observeRelayRetirement(config,dir,pair,cloud,error))continue;
+    if(!retryPaused(error))acquisitionFailed=true;
+   }
+  }
+ }else if(expired&&display){display.interest=undefined;}
+ if(display){
+  cloud.notificationPreviews=display.previews;cloud.liveActivityV2=display.v2;cloud.liveActivityInterest=display.interest;
+ }
  let detailsCurrent=false;let allowUngatedRequests=false;
  try{
- const payload=await projectSnapshot({...official.notificationSnapshot(),hostName:snapshot.hostName,measuredAt:snapshot.measuredAt},pair,journal,official.generation);
- detailsCurrent=await statePublisher.publish(pair,cloud,payload);
+  const payload=await projectSnapshot({...official.notificationSnapshot(),hostName:snapshot.hostName,measuredAt:snapshot.measuredAt},pair,journal,official.generation);
+  detailsCurrent=await statePublisher.publish(pair,cloud,payload);
  }catch(error){
- if(error instanceof Error&&(error.message==='NOTIFICATION_REQUEST_LIMIT'||error.message==='NOTIFICATION_STATE_LIMIT'))allowUngatedRequests=true;
- failure=error;if(await observeRelayRetirement(config,dir,pair,cloud,error))continue
+  if(error instanceof Error&&(error.message==='NOTIFICATION_REQUEST_LIMIT'||error.message==='NOTIFICATION_STATE_LIMIT'))allowUngatedRequests=true;
+  failure=error;if(await observeRelayRetirement(config,dir,pair,cloud,error))continue;
  }
  try{await publishResolutions(journal,pair,cloud)}catch(error){failure=error}
- try{await publishEvents(pair,cloud,journal,livePublisher,official.liveActivitySnapshot(),detailsCurrent,allowUngatedRequests)}catch(error){failure=error}
- // Publication failures are independent from acquisition. Preserve the normal
- // three-second command/control cadence while still surfacing degraded status.
- try{for(const envelope of await cloud.commands()){if(stopped||cycleFences.get(cloud.origin)?.error)break;try{await executeOperation({pair,journal,official,cloud,clock:Date.now},envelope)}catch(error){failure=error}}}
- catch(error){failure=error;if(!await observeRelayRetirement(config,dir,pair,cloud,error)&&!retryPaused(error))acquisitionFailed=true}
+ const interest=cloud.liveActivityInterest;
+ const update=display&&observation&&interest&&(observation.key!==display.sent||
+   observation.active&&livePublisher.needsRenewal(pair.pairId,interest.registrationId))?liveSnapshot:null;
+ if(pending||update)try{
+  const recovering=!!update&&!!interest&&livePublisher.hasUnacknowledged(pair.pairId,interest.registrationId);
+  const registrationChanged=await publishEvents(pair,cloud,journal,livePublisher,update,detailsCurrent,allowUngatedRequests);
+  if(update&&display){
+   if(registrationChanged){
+    // The only terminal event may race an iPhone token rotation. Re-read
+    // once for this update, after committing any separate attention ACKs.
+    display.key=undefined;
+    await cloud.discoverLiveActivity();
+    display.key=observation?.key;
+    display.interest=cloud.liveActivityInterest;
+    if(display.interest&&display.interest.registrationId!==interest?.registrationId){
+     if(await publishEvents(pair,cloud,journal,livePublisher,update,detailsCurrent,allowUngatedRequests))display.interest=undefined;
+    }else display.interest=undefined;
+   }
+   // An immutable retry may have acknowledged the preceding observation.
+   // Run the current observation again after the durable retry is acknowledged.
+   if(!recovering||registrationChanged)display.sent=observation?.key;
+  }
+ }catch(error){failure=error;if(await observeRelayRetirement(config,dir,pair,cloud,error))continue;}
  }catch(error){failure=error;if(!await observeRelayRetirement(config,dir,pair,cloud,error)&&!retryPaused(error))acquisitionFailed=true}}
  try{await enrollment.cleanup(config)}catch(error){failure=error}
  if(failure){lastError=failure instanceof CloudError?failure.code:'CLI_CYCLE_FAILED';stage='degraded';backoff=acquisitionFailed?Math.min(backoff*2,LIMITS.maxBackoffMs):LIMITS.pollMs}else{lastError=null;backoff=LIMITS.pollMs}
  }catch(error){lastError=error instanceof CloudError?error.code:'CLI_CYCLE_FAILED';stage='degraded';backoff=retryPaused(error)?LIMITS.pollMs:Math.min(backoff*2,LIMITS.maxBackoffMs)}
  // Pauses are shared only by relay origin, never reset by a cached rejection.
- // Other relays retain ordinary control priority/cadence. If all are paused,
+ // Other relays retain their normal local processing. If all are paused,
  // sleep to the first original deadline; stop still interrupts this wait.
  const wakeNow=Date.now();let retryWake=Infinity;
  for(const origin of pollOrigins){const retryAt=retryStates.get(origin)?.error?.retryAt;if(retryAt===undefined||retryAt<=wakeNow){retryWake=wakeNow;break}retryWake=Math.min(retryWake,retryAt)}
@@ -161,7 +218,9 @@ export async function runRuntime(dir:string,version?:string){
   if(issuedRecovery!==recoveryRevision)continue;
   localRetryWake=new AbortController();
  }
- const wake=localRetryWake?AbortSignal.any([runtimeSignal,localRetryWake.signal]):runtimeSignal;
- try{await sleep(backoff,undefined,{signal:wake})}catch{}finally{localRetryWake=undefined}
+ if(attentionQueue.length||observedDisplayRevision!==displayRevision)continue;
+ eventWake=new AbortController();
+ const wake=AbortSignal.any([runtimeSignal,eventWake.signal,...(localRetryWake?[localRetryWake.signal]:[])]);
+ try{await sleep(backoff,undefined,{signal:wake})}catch{}finally{localRetryWake=undefined;eventWake=undefined}
  }}finally{controller.abort();await watchdogTask;process.removeListener('SIGINT',stop);process.removeListener('SIGTERM',stop);process.removeListener('message',parentMessage);process.removeListener('disconnect',parentGone);try{detach?.();await official?.close().catch(()=>{})}finally{try{enrollment.close()}finally{try{closeJournal?.()}finally{await release()}}}}
 }

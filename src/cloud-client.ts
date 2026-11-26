@@ -4,7 +4,7 @@ import { validateEnvelope, type Envelope } from './crypto.js';
 import type {LiveContribution,LiveInterest} from './live-activity.js';
 import {UUID} from './limits.js';
 import type { ReceiptState } from './journal.js';
-export class CloudError extends Error{readonly code:string;constructor(code:string,readonly status:number,readonly retryAt?:number,readonly pauseScope:'origin'|'normal'='origin'){const safe=/^[A-Z0-9_]{1,64}$/.test(code)?code:'CLOUD_HTTP_ERROR';super(safe);this.code=safe}}
+export class CloudError extends Error{readonly code:string;constructor(readonly relayCode:string,readonly status:number,readonly retryAt?:number,readonly pauseScope:'origin'|'normal'='origin'){const safe=/^[A-Z0-9_]{1,64}$/.test(relayCode)?relayCode:'CLOUD_HTTP_ERROR';super(safe);this.code=safe}}
 export interface CloudRetryState{error?:CloudError;normalError?:CloudError}
 function retryDeadline(value:string|null,status:number,now:number){
  if(value===null||![429,503].includes(status))return;
@@ -29,16 +29,19 @@ export class CloudClient{
  notificationPreviews=false;
  liveActivityV2=false;
  liveActivityInterest?:LiveInterest;
- constructor(origin:string,readonly pairId:string,private token:string,allowLoopback=false,private fetcher:typeof fetch=fetch,private signal?:AbortSignal,private retryState:CloudRetryState={},private cycleFence?:CloudRetryState){this.origin=validateOrigin(origin,allowLoopback)}
+ constructor(origin:string,readonly pairId:string,private token:string,allowLoopback=false,private fetcher:typeof fetch=fetch,private signal?:AbortSignal,private retryState:CloudRetryState={},private cycleFence?:CloudRetryState,private pairRetry:CloudRetryState={}){this.origin=validateOrigin(origin,allowLoopback)}
  async request(method:string,path:string,body?:unknown,signal?:AbortSignal):Promise<Record<string,unknown>>{
  // A runtime cycle that observed a pause must reacquire controls in a new
  // cycle, even if an intervening SDK call outlasted the wall-clock deadline.
  signal?.throwIfAborted();
  if(this.cycleFence?.error)throw this.cycleFence.error;
  const paused=this.retryState.error;if(paused?.retryAt!==undefined&&paused.retryAt>Date.now()){if(this.cycleFence)this.cycleFence.error=paused;throw paused}this.retryState.error=undefined;
- if(!recoveryRequest(method,path)){
+ const recovery=recoveryRequest(method,path),now=Date.now();
+ const pairPause=recovery?this.pairRetry.error:this.pairRetry.normalError;
+ if(pairPause?.retryAt!==undefined&&pairPause.retryAt>now)throw pairPause;
+ if(!recovery){
   if(this.cycleFence?.normalError)throw this.cycleFence.normalError;
-  const normal=this.retryState.normalError;if(normal?.retryAt!==undefined&&normal.retryAt>Date.now()){if(this.cycleFence)this.cycleFence.normalError=normal;throw normal}this.retryState.normalError=undefined;
+  const normal=this.retryState.normalError;if(normal?.retryAt!==undefined&&normal.retryAt>now){if(this.cycleFence)this.cycleFence.normalError=normal;throw normal}this.retryState.normalError=undefined;
  }
  const json=body===undefined?undefined:JSON.stringify(body);if(json&&Buffer.byteLength(json)>(method==='POST'&&path===this.path('/events')?LIMITS.liveEventBytes:LIMITS.envelopeBytes))throw Error('REQUEST_LIMIT');
  const response=await this.fetcher(this.origin+'/v1'+path,{method,headers:{authorization:'Bearer '+this.token,...(json?{'content-type':'application/json'}:{})},body:json,signal:AbortSignal.any([AbortSignal.timeout(20000),...(this.signal?[this.signal]:[]),...(signal?[signal]:[])]),redirect:'error'});
@@ -57,8 +60,16 @@ export class CloudClient{
   const error=result.error&&typeof result.error==='object'?result.error as {code?:unknown}:{},resetHeader=response.headers.get('x-moremote-reset'),reset=Number(resetHeader);
   // Only an explicit, internally consistent daily normal-quota rejection can
   // leave recovery open. Missing/malformed hints and outages remain origin-wide.
-  const normalOnly=response.status===429&&error.code==='daily_work_limit'&&response.headers.get('x-moremote-budget')==='normal'
-   &&retryAt!==undefined&&resetHeader!==null&&/^\d{1,16}$/.test(resetHeader)&&Number.isSafeInteger(reset)&&reset>Date.now()&&Math.abs(reset-retryAt)<=1000;
+  const exactReset=retryAt!==undefined&&resetHeader!==null&&/^\d{1,16}$/.test(resetHeader)
+    &&Number.isSafeInteger(reset)&&reset>Date.now()&&Math.abs(reset-retryAt)<=1000;
+  const pairBudget=response.headers.get('x-moremote-pair-budget');
+  if(response.status===429&&exactReset&&error.code==='pair_daily_work_limit'
+    &&response.headers.get('x-moremote-limit-scope')==='pair'&&['normal','recovery'].includes(pairBudget??'')){
+   const failure=new CloudError('PAIR_DAILY_WORK_LIMIT',429,reset,pairBudget==='normal'?'normal':'origin');
+   this.pairRetry[pairBudget==='normal'?'normalError':'error']=failure;
+   throw failure;
+  }
+  const normalOnly=response.status===429&&exactReset&&error.code==='daily_work_limit'&&response.headers.get('x-moremote-budget')==='normal';
   const failure=new CloudError(typeof error.code==='string'?error.code:'CLOUD_HTTP_ERROR',response.status,retryAt,normalOnly?'normal':'origin');
   if(retryAt!==undefined){const field=normalOnly?'normalError':'error';this.retryState[field]=failure;if(this.cycleFence)this.cycleFence[field]=failure}
   throw failure;
@@ -74,9 +85,21 @@ export class CloudClient{
  receipt(id:string,body:{state:ReceiptState;revision:number;envelope:Envelope}){return this.request('POST',this.path('/commands/'+id+'/receipt'),body)}
  state(envelope:Envelope){return this.request('PUT',this.path('/state'),{envelope})}
  attention(body:unknown){return this.request('POST',this.path('/attention'),body)}
+ private applyLiveInterest(raw:unknown){
+  this.liveActivityInterest=undefined;
+  if(!this.liveActivityV2||raw===null||raw===undefined)return;
+  const value=object(raw);
+  if(typeof value.registrationId!=='string'||!UUID.test(value.registrationId))throw Error('INVALID_LIVE_ACTIVITY_REGISTRATION');
+  const interest=validateEnvelope(value.interest,Date.now());
+  if(interest.pairId!==this.pairId||interest.channel!=='activityInterest')throw Error('INVALID_LIVE_ACTIVITY_INTEREST');
+  this.liveActivityInterest={registrationId:value.registrationId,interest};
+ }
+ async discoverLiveActivity(){
+  const result=await this.request('GET',this.path('/live-activity'));
+  this.applyLiveInterest(result.liveActivity);
+ }
  async controls():Promise<Envelope[]>{const result=await this.request('GET',this.path('/controls'));if(!Array.isArray(result.controls)||result.controls.length>100)throw Error('INVALID_CONTROL_PAGE');
- this.liveActivityInterest=undefined;
- if(this.liveActivityV2&&result.liveActivity){const value=object(result.liveActivity);if(typeof value.registrationId!=='string'||!UUID.test(value.registrationId))throw Error('INVALID_LIVE_ACTIVITY_REGISTRATION');const interest=validateEnvelope(value.interest,Date.now());if(interest.pairId!==this.pairId||interest.channel!=='activityInterest')throw Error('INVALID_LIVE_ACTIVITY_INTEREST');this.liveActivityInterest={registrationId:value.registrationId,interest}}
+ this.applyLiveInterest(result.liveActivity);
  return result.controls.map(row=>object(row).envelope as Envelope).filter(Boolean)}
  async events(attention:unknown[],activity?:LiveContribution){
  const value=await this.request('POST',this.path('/events'),{attention,...(activity?{activity}:{})});

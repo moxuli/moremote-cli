@@ -58,9 +58,34 @@ interface Publication {
   cycles: Record<string, Cycle>;
 }
 
+/** Display-relevant Paseo changes only. Streaming and updatedAt churn are not publication demand. */
+export function liveObservation(snapshot:LiveSnapshot|null,now=Date.now()){
+  if(!snapshot)return;
+  const visible=snapshot.agents.filter(agent=>!agent.internal&&!agent.archivedAt&&!agent.labels?.['paseo.parent-agent-id']?.trim());
+  const active=visible.some(agent=>['running','waiting'].includes(phaseFor(agent,now)));
+  const relevant=visible.filter(agent=>phaseFor(agent,now)!=='idle');
+  return {active,present:relevant.length>0, key:canonical({
+    daemonServerId:snapshot.daemonServerId,hostName:snapshot.hostName,
+    workspaces:snapshot.workspaces?.filter(workspace=>relevant.some(agent=>agent.workspaceId===workspace.id)),
+    agents:relevant.map(agent=>[agent.id,agent.title,agent.workspaceId,agent.lastUserMessageAt,agent.activeTurn?.turnId,
+      phaseFor(agent,now),agent.attentionTimestamp,agent.pendingPermissions.map(request=>[request.id,request.kind])])
+      .sort((left,right)=>String(left[0]).localeCompare(String(right[0]))),
+  })};
+}
+
 /** Durable display publication only. No command execution or remote tracking authority. */
 export class LiveActivityPublisher {
   constructor(private journal: OperationJournal) {}
+  hasUnacknowledged(pairId:string,registrationId:string,now=Date.now()){
+    const previous=this.journal.livePublication<Publication>(pairId);
+    return previous?.registrationId===registrationId&&!previous.acknowledged&&!previous.stopped
+      && previous.contribution.expiresAt>now;
+  }
+  needsRenewal(pairId:string, registrationId:string, now=Date.now()){
+    const old=this.journal.livePublication<Publication>(pairId);
+    return old?.registrationId===registrationId&&!old.stopped&&old.deadline>now
+      && (!old.acknowledged||old.contribution.expiresAt-now<=120_000);
+  }
   async prepare(pair: Pair, raw: LiveInterest, snapshot: LiveSnapshot, now = Date.now()): Promise<LiveContribution | undefined> {
     if (!pair.active || pair.revokedAt !== undefined || pair.relayRetiredAt !== undefined
       || this.journal.pairRevoked(pair.pairId) || !UUID.test(raw.registrationId)

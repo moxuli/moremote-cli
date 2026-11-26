@@ -69,7 +69,18 @@ Never log complete pairing links, user prompts, tool output, filesystem paths,
 model credentials or private keys. A redacted diagnostic is explicit and includes
 versions, capabilities, connection stages and error codes, not hidden user data.
 
-## Action semantics
+## Event-driven cloud delivery
+
+During steady-state idle, the companion makes no Cloudflare calls to look for
+commands, controls, or Live Activities. It observes the local Paseo directory
+and sends changes in the projected display state. An active activity can also
+renew its bounded freshness. Registration is resolved only when there is
+notification or activity delivery work. New notifications open the conversation
+in the phone app. Only legacy hosts take commands from the old queues. The
+companion retains read-only reconciliation and immutable receipts for work
+previously attempted.
+
+## Action semantics for legacy deliveries
 
 A command targets one paired computer, one official conversation and, for a
 reply/approval, one currently pending request. Identity, expiry and exact content

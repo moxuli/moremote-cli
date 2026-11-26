@@ -43,8 +43,8 @@ export class OfficialClient implements OfficialOperations{
  private observationOrder=0;
  private previewAgents=new Map<string,AgentSnapshotPayload>();
  private pendingTasks=new Map<string,ReturnType<typeof projectTask>>();
- constructor(readonly config:Config,private journal?:OperationJournal){const target=config.target||localListen(config.paseoHome);const password=parseHostTarget(target).password||process.env.PASEO_PASSWORD;
- this.sdk=createHostClient(target,{clientId:config.clientId,clientType:'cli',appVersion:'moremote-cli/0.1.0',...(password?{password}:{localCredential:()=>readLocalCredentialForTarget(config.paseoHome,target)}),reconnect:{enabled:false},connectTimeoutMs:15000,logger:{debug(){},info(){},warn(){},error(){}}});this.liveDirectory=new LiveDirectory(this.sdk);}
+ constructor(readonly config:Config,private journal?:OperationJournal,onDisplayChange?:()=>void){const target=config.target||localListen(config.paseoHome);const password=parseHostTarget(target).password||process.env.PASEO_PASSWORD;
+ this.sdk=createHostClient(target,{clientId:config.clientId,clientType:'cli',appVersion:'moremote-cli/0.1.0',...(password?{password}:{localCredential:()=>readLocalCredentialForTarget(config.paseoHome,target)}),reconnect:{enabled:false},connectTimeoutMs:15000,logger:{debug(){},info(){},warn(){},error(){}}});this.liveDirectory=new LiveDirectory(this.sdk,onDisplayChange);}
  async connect(){await this.sdk.connect();const info=this.info();if(!info||info.features?.explicitEventSubscriptions!==true){await this.sdk.close();throw Error('EXPLICIT_SUBSCRIPTIONS_REQUIRED')}if(this.config.daemonServerId&&info.serverId!==this.config.daemonServerId){await this.sdk.close();throw Error('DAEMON_IDENTITY_CHANGED')}
  this.serverId=info.serverId;this.journal?.retireGeneration(info.serverId,this.generation);
  this.unlisten=this.sdk.subscribeRawMessages(message=>{
@@ -67,7 +67,7 @@ export class OfficialClient implements OfficialOperations{
  if(message.type==='agent_permission_resolved'){const p=message.payload;this.fenceRequestReads(p.agentId,++this.observationOrder);this.journal?.resolution(this.serverId,p.agentId,p.requestId,this.generation,p.resolution);const task=this.pendingTasks.get(p.agentId);if(task){task.pendingRequests=task.pendingRequests.filter(r=>r.requestId!==p.requestId);if(!task.pendingRequests.length)this.pendingTasks.delete(p.agentId)}}
  });
  this.subscription=this.sdk.observeEvents(['agent_attention_required','agent_permission_request','agent_permission_resolved','status.server_info'],{notifications:false});await this.subscription.ready;}
- setLiveActivityEnabled(enabled:boolean){this.liveDirectory.setEnabled(enabled)}
+ setLiveActivityEnabled(enabled:boolean,enrich:boolean=enabled){this.liveDirectory.setEnabled(enabled,enrich)}
  liveActivitySnapshot(){const agents=this.liveDirectory.snapshot();return agents?{daemonServerId:this.serverId,hostName:this.info()?.hostname||hostname(),agents,workspaces:this.liveDirectory.workspaces(),requestWorkspace:(id:string)=>this.liveDirectory.requestWorkspace(id)}:null}
  info():ServerInfoStatusPayload|null{return this.sdk.getLastServerInfoMessage()}
  private emit(event:Attention){if(Number.isSafeInteger(event.timestamp)&&event.timestamp>=0)for(const cb of this.callbacks)cb(event)}
