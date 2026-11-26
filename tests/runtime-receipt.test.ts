@@ -22,7 +22,7 @@ const pairId='11111111-1111-4111-8111-111111111111',id='22222222-2222-4222-8222-
 async function until(predicate:()=>boolean|Promise<boolean>,message:string,ms=12000){const end=performance.now()+ms;while(performance.now()<end){if(await predicate())return;await sleep(30)}throw Error(message)}
 async function bounded<T>(promise:Promise<T>,ms:number,message:string){const deadline=Promise.withResolvers<never>();const timer=setTimeout(()=>deadline.reject(Error(message)),ms);timer.unref();try{return await Promise.race([promise,deadline.promise])}finally{clearTimeout(timer)}}
 async function body(req:IncomingMessage){let value='';for await(const chunk of req)value+=chunk;return value?JSON.parse(value):null}
-async function fixture(options:{withActivity?:boolean;rotateOnTerminal?:boolean;loseRunning?:boolean;pending?:boolean;receiptFailure?:boolean;receiptLosses?:number;stateLosses?:number;retired?:boolean;missing?:boolean;transient?:boolean;stallSnapshot?:boolean;snapshotDelayMs?:number;seedReceipt?:boolean;pause?:{path:'live-activity'|'state'|'receipt';status:429|503;seconds:number}}={}){
+async function fixture(options:{locallyRetired?:boolean;withActivity?:boolean;rotateOnTerminal?:boolean;loseRunning?:boolean;pending?:boolean;receiptFailure?:boolean;receiptLosses?:number;stateLosses?:number;retired?:boolean;missing?:boolean;transient?:boolean;stallSnapshot?:boolean;snapshotDelayMs?:number;seedReceipt?:boolean;pause?:{path:'live-activity'|'state'|'receipt';status:429|503;seconds:number}}={}){
  // A short private fixture root avoids Darwin's sockaddr_un limit even when TMPDIR is long.
  // Production socket placement/ownership checks remain unchanged.
  const root=await mkdtemp(join(process.platform==='win32'?tmpdir():'/tmp','mrr-')),dir=join(root,'c');
@@ -76,7 +76,7 @@ async function fixture(options:{withActivity?:boolean;rotateOnTerminal?:boolean;
    type:'agent_update',payload:{kind:'upsert',agent,subscriptionId:'agents',seq:++sequence},
   })));
  };
- const pair={pairId,rootKey:Buffer.alloc(32,7).toString('base64url'),hostToken:Buffer.alloc(32,8).toString('base64url'),active:true,daemonServerId:'d'};
+ const pair={pairId,rootKey:Buffer.alloc(32,7).toString('base64url'),hostToken:Buffer.alloc(32,8).toString('base64url'),active:!options.locallyRetired,daemonServerId:'d',...(options.locallyRetired?{relayRetiredAt:createdAt}:{})};
  await saveConfig(dir,{version:1,clientId:'moremote-cli-runtime-test',target:'tcp://127.0.0.1:'+daemonAddress.port+'?password=synthetic',paseoHome:join(root,'official'),daemonServerId:'d',apiOrigin:'http://127.0.0.1:'+relayAddress.port,allowLoopbackHttp:true,cloudEnabled:true,pairs:[pair]});
  const now=Date.now();const journal=new OperationJournal(join(dir,'journal.sqlite'));try{
   const command=await sealEnvelope(Buffer.alloc(32,7),{version:1,pairId,id,channel:'command',issuedAt:now,expiresAt:now+300000},{type:'send',agentId:'a',messageId:id,text:'synthetic'});journal.prepare(command);journal.dispatched(pairId,id);
@@ -215,5 +215,15 @@ test('a lost historical receipt is reconciled after relay retirement without acq
   const receipts=f.requests.filter(request=>request.path.endsWith('/receipt'));
   assert.deepEqual(receipts[0]?.body,receipts[1]?.body);
   assert.equal(f.counts.controls,0);assert.equal(f.counts.commands,0);assert.equal(f.counts.attention,0);
+ }finally{await f.close()}
+});
+
+test('a terminal receipt is recovered for a dispatch interrupted before local relay retirement',{timeout:12000},async()=>{
+ const f=await fixture({locallyRetired:true,pending:false});try{
+  f.start();await until(()=>f.counts.receipts===1,'DISPATCH_OUTCOME_NEVER_RECONCILED');
+  assert.equal(f.counts.controls,0);assert.equal(f.counts.commands,0);assert.equal(f.counts.live,0);
+  assert.equal(f.counts.pair,0);assert.equal(f.counts.mutations,0);
+  const receipt=f.requests.find(request=>request.path.endsWith('/receipt'));
+  assert.equal((receipt?.body as {state:string})?.state,'unknown');
  }finally{await f.close()}
 });

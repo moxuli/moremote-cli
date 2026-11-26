@@ -140,7 +140,7 @@ export async function runRuntime(dir:string,version?:string){
  for(const pair of config.pairs){if(stopped)break;const cloud=clouds.get(pair.pairId);if(!cloud||cycleFences.get(cloud.origin)?.error)continue;try{
  if(pair.daemonServerId&&pair.daemonServerId!==official.info()!.serverId){if(journal.pairRevoked(pair.pairId)||pair.relayRetiredAt!==undefined)continue;throw Error('PAIR_DAEMON_MISMATCH')}
  // Pairing and recovery concern explicit pending work. Neither can dispatch a new cloud command.
- if(!pair.active&&pair.revokedAt===undefined&&!journal.pairRevoked(pair.pairId)){
+ if(!pair.active&&pair.revokedAt===undefined&&pair.relayRetiredAt===undefined&&!journal.pairRevoked(pair.pairId)){
   await activatePending(config,dir,pair,cloud,official.info()!.serverId,snapshot.hostName);continue;
  }
  if(await reconcileJournal({pair,journal,official,cloud,clock:Date.now}))failure=Error('RECEIPT_RECONCILIATION_FAILED');
