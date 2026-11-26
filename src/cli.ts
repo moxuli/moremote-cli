@@ -25,7 +25,7 @@ Usage: moremote-cli <command> [options]
             [--paseo-home <directory>] [--allow-loopback-http]
   check [--connect]       Redacted local checks; --connect is read-only
   pair [--json]           Expert-only private one-phone offer and activation
-  run                     Foreground observer and scoped command consumer
+  run                     Foreground Paseo observer and push delivery
   status                  Redacted runtime/config/owned-service/update state
   service-install --yes   Explicit per-user managed CLI login registration
   auto-update --enable | --disable  Persistent managed-update policy

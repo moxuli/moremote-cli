@@ -103,11 +103,13 @@ before using that legacy manual path.
 
 ## Cloud boundary
 
-Cloudflare supports notifications, explicit replies/approvals and optional
-phone-authorized remote updates to an already-started Live Activity. Notification
-and activity changes share one bounded event POST; unchanged observations add no
-Worker request. Widgets and ordinary app/extension reads and sends use official
-Paseo transport and shared device state. No general directory or usage feed is
+Cloudflare supports notifications and optional phone-authorized remote updates
+to an already-started Live Activity. Notification and activity changes share a
+bounded event POST. The companion resolves the registration for delivery work
+and skips empty command and control queries. Notification actions open the
+conversation in MoRemote. Replies and approvals in the conversation, widgets,
+and ordinary app/extension reads and sends use official Paseo transport and
+shared device state. No general directory or usage feed is
 uploaded. See the [configuration](docs/configuration.md) and rollout evidence in
 [STATE](docs/STATE.md).
 
@@ -115,7 +117,7 @@ uploaded. See the [configuration](docs/configuration.md) and rollout evidence in
 
 The cloud sees pairing/operation/event identities, times, sizes, bounded transport states, scoped capability hashes and encrypted command/control/receipt/state/attention bodies. Attention routing includes a separately derived opaque conversation tag; provider fallback text is generic; supported native apps can decrypt the separately encrypted bounded alert preview. Endpoint-encrypted notification state includes only verified daemon identity and current occurrence-bound question/approval forms. Original supported question/approval forms are included only within strict bounds, to answer that exact request. No complete chat/history, code files, model keys or official Paseo passwords/local credentials are uploaded. The relay cannot decrypt or manufacture accepted commands. This is not forward secrecy.
 
-Only exact message sends and responses to an **actual current** question/approval are supported. Admission accepted is not task completion. Unknown official outcomes are reconciled, **never blindly resent**, even when the same message ID is available.
+The current runtime reconciles receipts for previously attempted notification operations. It preserves the original outcome and expiry, including across a process restart or cloud-side revocation.
 Endpoint cancellation/revocation uses authenticated encrypted controls and durable local tombstones, not trust in a cloud DELETE result. An offline/withheld control is waiting/unknown, not endpoint-confirmed. A dispatched operation is too late to undo. Exact request-instance bindings retire on source/resolution/connection changes. Minimal revisioned encrypted receipts remain auditable for24h after original expiry, separately from short-lived user payloads; positive admission never regresses to unknown.
 
 ## Lifecycle and ownership
