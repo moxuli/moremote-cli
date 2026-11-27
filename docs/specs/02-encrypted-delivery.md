@@ -221,10 +221,11 @@ Only a matching workspace hint permits current official workspace text; conversa
 missing/mismatched hints or visible multiple roots retain current agent text.
 The relay sees only the existing opaque envelope. Unknown publications keep
 their exact original ciphertext, even if names or hints change before acknowledgement.
-Missing workspace metadata uses a generic title inside the encrypted activity
-candidate. The task remains in the contribution with its observed phase and
-unchanged occurrence identity. A full official workspace entry with a
-missing/null/blank title permits agent fallback. A removal uses the generic title.
+When workspace metadata is unavailable, a finished or failed activity falls
+back to the current official conversation title if present. Other phases use a
+generic title until the workspace source resolves. A full official workspace
+entry with a missing/null/blank title permits conversation fallback for all
+phases. Title changes do not change the activity phase or occurrence identity.
 Read failures and bounded-page omissions retain
 confirmed metadata. One workspace shares generation/sequence ordering across
 subscriptions; older same-generation snapshots cannot replace newer updates.

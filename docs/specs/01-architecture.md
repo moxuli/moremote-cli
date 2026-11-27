@@ -144,14 +144,17 @@ the companion resolves current official text, never a cached phone title. Missin
 provenance cannot be inferred from a partial recent directory. Visible shared roots
 deny workspace projection; managed children do not count as independent roots.
 Workspace updates enter the existing semantic event fingerprint, not another
-Worker poll. Missing workspace metadata uses a generic title while activity
-phases continue publishing. Explicit empty official titles fall back to agent text.
+Worker poll. When workspace metadata is unavailable, a terminal activity uses
+its verified conversation title if present. Other phases keep their existing
+generic fallback while waiting for workspace metadata. Explicit empty official
+workspace titles fall back to conversation text.
 Same-daemon read recovery retains confirmed names until new authority arrives.
 Disabling releases every read interest.
 
 A terminal occurrence verified by the existing exact official attention read
 can repair a stale running row on the same live subscription. The row must
-still be the turn captured before the read, with matching identity and clocks
-that place it before completion. A newer turn, a more recent update, or a
-replacement subscription takes precedence. This is display-only and adds no official read
-or Worker poll.
+still represent the turn captured before the read, with matching identity and
+clocks. The read may also fill a missing title on a matching terminal row, or
+carry it through recovery of a missed terminal upsert. A newer turn, a newer
+snapshot, a nonblank live title, or a replacement subscription takes precedence.
+Title repair uses the existing read and keeps the same publication occurrence.

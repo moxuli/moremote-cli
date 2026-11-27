@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- Keep the conversation name on finished and failed Live Activities when workspace metadata is still unavailable. Recover a missing title from the same verified Paseo completion read used by notifications.
+
 ## 0.1.14 — 2026-11-27
 
 - Deliver notifications and encrypted Live Activity updates from local Paseo observations. Idle paired hosts no longer read cloud command or control queues.

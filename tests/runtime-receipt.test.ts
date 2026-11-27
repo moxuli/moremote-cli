@@ -3,6 +3,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {once} from 'node:events';
 import {spawn,type ChildProcess} from 'node:child_process';
+import {createDecipheriv} from 'node:crypto';
 import {createServer,type IncomingMessage} from 'node:http';
 import {mkdtemp,rm} from 'node:fs/promises';
 import {join} from 'node:path';
@@ -14,6 +15,7 @@ import {saveConfig,loadConfig} from '../src/config.ts';
 import {OperationJournal} from '../src/journal.ts';
 import {sealEnvelope,openEnvelope,type Envelope} from '../src/crypto.ts';
 import {requestControl,controlEndpoint} from '../src/control.ts';
+import type {LiveContribution} from '../src/live-activity.ts';
 
 const pairId='11111111-1111-4111-8111-111111111111',id='22222222-2222-4222-8222-222222222222';
 // These subprocess consumers deliberately measure the platform's real 3s poll
@@ -22,7 +24,7 @@ const pairId='11111111-1111-4111-8111-111111111111',id='22222222-2222-4222-8222-
 async function until(predicate:()=>boolean|Promise<boolean>,message:string,ms=12000){const end=performance.now()+ms;while(performance.now()<end){if(await predicate())return;await sleep(30)}throw Error(message)}
 async function bounded<T>(promise:Promise<T>,ms:number,message:string){const deadline=Promise.withResolvers<never>();const timer=setTimeout(()=>deadline.reject(Error(message)),ms);timer.unref();try{return await Promise.race([promise,deadline.promise])}finally{clearTimeout(timer)}}
 async function body(req:IncomingMessage){let value='';for await(const chunk of req)value+=chunk;return value?JSON.parse(value):null}
-async function fixture(options:{locallyRetired?:boolean;withActivity?:boolean;rotateOnTerminal?:boolean;rejectAlertDuringRotation?:boolean;loseRunning?:boolean;pending?:boolean;receiptFailure?:boolean;receiptLosses?:number;stateLosses?:number;retired?:boolean;missing?:boolean;catalogSkew?:boolean;transient?:boolean;stallSnapshot?:boolean;snapshotDelayMs?:number;seedReceipt?:boolean;pause?:{path:'live-activity'|'state'|'receipt';status:429|503;seconds:number}}={}){
+async function fixture(options:{locallyRetired?:boolean;withActivity?:boolean;workspaceTitleHint?:boolean;rotateOnTerminal?:boolean;rejectAlertDuringRotation?:boolean;loseRunning?:boolean;pending?:boolean;receiptFailure?:boolean;receiptLosses?:number;stateLosses?:number;retired?:boolean;missing?:boolean;catalogSkew?:boolean;transient?:boolean;stallSnapshot?:boolean;snapshotDelayMs?:number;seedReceipt?:boolean;pause?:{path:'live-activity'|'state'|'receipt';status:429|503;seconds:number}}={}){
  // A short private fixture root avoids Darwin's sockaddr_un limit even when TMPDIR is long.
  // Production socket placement/ownership checks remain unchanged.
  const root=await mkdtemp(join(process.platform==='win32'?tmpdir():'/tmp','mrr-')),dir=join(root,'c');
@@ -34,7 +36,8 @@ async function fixture(options:{locallyRetired?:boolean;withActivity?:boolean;ro
  const interest=options.withActivity?await sealEnvelope(Buffer.alloc(32,7),{
   version:1,pairId,id:subscriptionId,channel:'activityInterest',issuedAt:createdAt,expiresAt:deadline,
  },{version:2,subscriptionId,generation,hostID:'host',hostLifetime:generation,daemonServerId:'d',
-  displayKey:Buffer.alloc(32,9).toString('base64url'),createdAt,deadline}):undefined;
+  displayKey:Buffer.alloc(32,9).toString('base64url'),createdAt,deadline,
+  ...(options.workspaceTitleHint?{titleHints:[{agentId:syntheticAgent.id,workspaceId:'workspace',source:'workspace'}]}:{})}):undefined;
  const phases:string[]=[],runningBodies:unknown[]=[];let rotated=false;
  const relay=createServer(async(req,res)=>{const path=req.url||'';const value=await body(req);requests.push({path,method:req.method||'',at:performance.now(),body:value});res.setHeader('Content-Type','application/json');const fail=(code:string,http=409)=>{res.writeHead(http);res.end(JSON.stringify({ok:false,error:{code,message:'Synthetic fixture failure'}}))};
   if(options.pause&&!pauseAt&&path.endsWith('/'+options.pause.path)){pauseAt=performance.now();res.setHeader('Retry-After',String(options.pause.seconds));return fail('cost_guard_closed',options.pause.status)}
@@ -72,6 +75,7 @@ async function fixture(options:{locallyRetired?:boolean;withActivity?:boolean;ro
  const transition=(status:'running'|'idle',updatedAt=new Date().toISOString())=>{
   const turnTime=new Date(createdAt-1000).toISOString();
   const agent=AgentSnapshotPayloadSchema.parse({...syntheticAgent,status,lastUserMessageAt:turnTime,updatedAt,
+   ...(options.workspaceTitleHint?{workspaceId:'workspace'}:{}),
    ...(status==='running'?{activeTurn:{turnId:'turn',startedAt:turnTime}}:{activeTurn:null,requiresAttention:true,attentionReason:'finished',attentionTimestamp:updatedAt})});
   for(const socket of daemon.clients)socket.send(JSON.stringify(wrapSessionMessage({
    type:'agent_update',payload:{kind:'upsert',agent,subscriptionId:'agents',seq:++sequence},
@@ -189,7 +193,7 @@ test('durable attention is delivered without any recurring cloud request on a qu
 
 
 test('a live registration is used on real Paseo state transitions and stays quiet during streaming churn',{timeout:26000},async()=>{
- const f=await fixture({withActivity:true,pending:false,seedReceipt:true});
+ const f=await fixture({withActivity:true,workspaceTitleHint:true,pending:false,seedReceipt:true});
  try{
   f.start();await until(()=>f.counts.attention===1,'INITIAL_NOTIFICATION_MISSING');
   await sleep(100);f.transition('running');
@@ -200,6 +204,17 @@ test('a live registration is used on real Paseo state transitions and stays quie
   assert.equal(f.requests.length,requests,'progress timestamps must not produce network writes');
   f.transition('idle');
   await until(()=>f.phases.includes('finished'),'TERMINAL_ACTIVITY_NOT_SENT');
+  const firstTerminal=f.requests.flatMap(request=>
+   (request.body as {activity?:LiveContribution}|null)?.activity?.candidates??[]).find(candidate=>candidate.phase==='finished');
+  assert.ok(firstTerminal);
+  const {version,pairId,id,channel,issuedAt,expiresAt,nonce,ciphertext}=firstTerminal.payload;
+  const sealed=Buffer.from(ciphertext,'base64url');
+  const phone=createDecipheriv('aes-256-gcm',Buffer.alloc(32,9),Buffer.from(nonce,'base64url'));
+  phone.setAAD(Buffer.from(JSON.stringify([version,pairId,id,channel,issuedAt,expiresAt])));
+  phone.setAuthTag(sealed.subarray(-16));
+  const display=JSON.parse(Buffer.concat([phone.update(sealed.subarray(0,-16)),phone.final()]).toString());
+  assert.equal(display.state.title,'Private task','the first completion names the conversation without workspace metadata');
+  assert.equal(display.state.agentId,'a');
   assert.equal(f.counts.live,lookups+1);assert.equal(f.counts.controls,0);assert.equal(f.counts.commands,0);
  }finally{await f.close()}
 });

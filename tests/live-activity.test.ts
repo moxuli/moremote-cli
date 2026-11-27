@@ -160,3 +160,28 @@ test('missing workspace metadata uses a generic title and later recovers the ver
   assert.equal((await openDisplay(cleared.candidates[0].payload)).state.title,agent.title);
  });
 });
+
+test('the first terminal contribution names the conversation while workspace metadata is unavailable',async()=>{
+ await fixture(async publisher=>{
+  const workspaceId='workspace-one';
+  const info=await interest(1000,[{agentId:agent.id,workspaceId,source:'workspace'}]);
+  const snapshot={daemonServerId:pair.daemonServerId,hostName:'machine',workspaces:[],
+   agents:[{...agent,workspaceId,status:'idle',activeTurn:null,requiresAttention:true,
+    attentionReason:'finished',attentionTimestamp:new Date(1300).toISOString()}]};
+  const finished=await publisher.prepare(pair,info,snapshot,1400);assert.ok(finished);
+  const [candidate]=finished.candidates;
+  const display=await openDisplay(candidate.payload);
+  assert.equal(display.state.phase,'finished');
+  assert.equal(display.state.agentId,agent.id);
+  assert.equal(display.state.title,agent.title);
+  publisher.acknowledge(pair.pairId,registrationId,finished.sequence);
+
+  const renamed=await publisher.prepare(pair,info,{...snapshot,workspaces:[{id:workspaceId,title:'Verified workspace'}]},1500);assert.ok(renamed);
+  assert.equal((await openDisplay(renamed.candidates[0].payload)).state.title,'Verified workspace');
+  assert.equal(renamed.candidates[0].eventId,candidate.eventId,'title recovery does not create another completion');
+
+  publisher.acknowledge(pair.pairId,registrationId,renamed.sequence);
+  const unnamed=await publisher.prepare(pair,info,{...snapshot,agents:[{...snapshot.agents[0],title:'  '}]},1600);assert.ok(unnamed);
+  assert.equal((await openDisplay(unnamed.candidates[0].payload)).state.title,'会话');
+ });
+});

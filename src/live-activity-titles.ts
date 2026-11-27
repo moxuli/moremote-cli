@@ -19,15 +19,15 @@ export function parseLiveTitleHints(value:unknown):LiveTitleHint[] {
 }
 
 /** A partial directory may disprove a workspace hint, never manufacture one. */
-export function liveTitle(agent:TitleAgent,hints:readonly LiveTitleHint[],agents:readonly TitleAgent[],workspaces:readonly LiveWorkspace[]):string|undefined {
+export function liveTitle(agent:TitleAgent,hints:readonly LiveTitleHint[],agents:readonly TitleAgent[],workspaces:readonly LiveWorkspace[],allowConversationFallback=false):string|undefined {
  const hint=hints.find(value=>value.agentId===agent.id&&value.workspaceId===agent.workspaceId);
  if(hint?.source==='workspace'){
   const roots=new Set(agents.filter(value=>value.workspaceId===hint.workspaceId&&!value.labels?.['paseo.parent-agent-id']?.trim()).map(value=>value.id));
   const workspace=workspaces.find(value=>value.id===hint.workspaceId);
   if(roots.size<=1){
-   if(!workspace||workspace.title===undefined)return;
-   if(workspace.title?.trim())return workspace.title.trim();
+   if(workspace?.title===undefined&&!allowConversationFallback)return;
+   if(workspace?.title?.trim())return workspace.title.trim();
   }
  }
- return agent.title||'会话';
+ return agent.title?.trim()||'会话';
 }

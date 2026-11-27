@@ -323,13 +323,44 @@ for(const ownedSubscriptions of [false,true])test(`real SDK wire (${ownedSubscri
    const offError=official.onAttention(event=>{offError();errored.resolve(event);});
    announce('error',errorAt+4);
    const release=await bounded(delayed.promise,2000,'TERMINAL_READ_NOT_STARTED');
-   const newer={...next,updatedAt:new Date(errorAt+20).toISOString(),activeTurn:{turnId:'synthetic-newer-turn',startedAt:new Date(errorAt+20).toISOString()}};
+   const newer={...next,title:null,updatedAt:new Date(errorAt+20).toISOString(),activeTurn:{turnId:'synthetic-newer-turn',startedAt:new Date(errorAt+20).toISOString()}};
    updateLiveAgent(newer);await flushWire();
    release();
    assert.equal((await bounded(errored.promise,2000,'TERMINAL_READ_NOT_SETTLED')).kind,'error');
    assert.equal(official.liveActivitySnapshot()?.agents[0].activeTurn?.turnId,newer.activeTurn.turnId,
     'a verified but delayed terminal read cannot settle a replacement turn');
+   assert.equal(official.liveActivitySnapshot()?.agents[0].title,null,'an old title cannot bind to a replacement turn');
    await Promise.all(publications);
+
+   for(const [index,order] of ['missed','before-read','during-read','previous-title'].entries()){
+    const at=timestamp+1000+index*300;
+    const exact={...terminal('finished',at),title:`Verified title ${index}`};
+    const untitled={...exact,title:null};
+    const knownTitle=order==='previous-title'?'Observed conversation title':null;
+    const inFlight={...untitled,title:knownTitle,status:'running' as const,updatedAt:new Date(at-100).toISOString(),
+     requiresAttention:false,attentionReason:null,attentionTimestamp:null,
+     activeTurn:{turnId:`synthetic-title-turn-${index}`,startedAt:new Date(at-1000).toISOString()}};
+    updateLiveAgent(inFlight);await flushWire();
+    if(order==='before-read'||knownTitle){
+     updateLiveAgent(untitled);await flushWire();
+     assert.equal(official.liveActivitySnapshot()?.agents[0].title,knownTitle,'a known title is ready for the first terminal publication');
+    }
+    currentAgent=exact;
+    const notice=Promise.withResolvers<Attention>();
+    const offTitle=official.onAttention(event=>{offTitle();notice.resolve(event);});
+    const held=Promise.withResolvers<()=>void>();holdAgentRead=held.resolve;
+    announce('finished',at+4);
+    const reply=await bounded(held.promise,2000,'TITLE_READ_NOT_STARTED');
+    if(order==='during-read'){updateLiveAgent(untitled);await flushWire();}
+    reply();
+    const notification=await bounded(notice.promise,2000,'TITLE_NOTICE_NOT_OBSERVED');
+    await Promise.all(publications);
+    assert.equal(notification.preview?.title,exact.title);
+    const expectedTitle=knownTitle??exact.title;
+    assert.equal(official.liveActivitySnapshot()?.agents[0].title,expectedTitle,`activity title when the directory update is ${order}`);
+    updateLiveAgent(untitled);await flushWire();
+    assert.equal(official.liveActivitySnapshot()?.agents[0].title,expectedTitle,'a duplicate terminal update preserves verified text');
+   }
    official.setLiveActivityEnabled(false);
   }
   stopAttention();

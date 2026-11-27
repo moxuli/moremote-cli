@@ -126,7 +126,8 @@ export class LiveActivityPublisher {
         : tag(key, [interest.hostLifetime, agent.id, lastUserAt, turnId ?? '']);
       cycles[agent.id] = { lastUserAt, turnId, cycle };
       const phase = phaseFor(agent, now);
-      const title = liveTitle(agent, titleHints, snapshot.agents, snapshot.workspaces ?? []) ?? '会话';
+      const isTerminal = phase === 'finished' || phase === 'error';
+      const title = liveTitle(agent, titleHints, snapshot.agents, snapshot.workspaces ?? [], isTerminal) ?? '会话';
       const topic = await presenceTopic(decode(pair.rootKey, 32), pair.pairId, agent.id);
       const eventId = ['waiting', 'finished', 'error'].includes(phase)
         ? tag(key, [cycle, phase, phase === 'waiting' ? canonical(agent.pendingPermissions) : agent.attentionTimestamp ?? '']) : undefined;
@@ -134,7 +135,7 @@ export class LiveActivityPublisher {
         state: { version: 1, subscriptionId: interest.subscriptionId, daemonServerId: snapshot.daemonServerId,
           agentId: agent.id, title: bounded(title, 160, 480),
           hostName: bounded(interest.hostName ?? snapshot.hostName, 80, 240), phase, startedAt: null,
-          requiresAttention: phase === 'waiting', isTerminal: phase === 'finished' || phase === 'error' } };
+          requiresAttention: phase === 'waiting', isTerminal } };
     }));
     projected.sort((a, b) => a.topic.localeCompare(b.topic));
     const fingerprint = canonical(projected);
