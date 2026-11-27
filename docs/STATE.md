@@ -1,5 +1,24 @@
 # Project state
 
+## Public 0.1.15 — 2026-11-27
+
+Source `fd87d1c81b9146708a751bb0389f0cc38f25a33a` is public as
+[`v0.1.15`](https://github.com/moxuli/moremote-cli/releases/tag/v0.1.15).
+The isolated preflight passed 306 tests, typecheck, build, and packaged upgrade
+and rollback. [Main CI](https://github.com/moxuli/moremote-cli/actions/runs/45939157676)
+passed on macOS, Ubuntu, and Windows. The
+[release run](https://github.com/moxuli/moremote-cli/actions/runs/45940189904)
+published a 188,612-byte tarball. The anonymous npm and GitHub downloads matched
+the prepared SHA256 `75195eed5ac404a6fcf19f7c43cdda65cd62b27357d0a262f476b7b6f45f8f70`.
+The isolated CLI reported 0.1.15. The registry metadata became visible before
+the tarball. Read-only retries verified the original publication after propagation.
+
+Finished and failed Live Activities can show the verified conversation title
+before workspace metadata arrives. The existing exact Paseo completion read also
+repairs a missing title on the matching live row. An isolated runtime test
+verified the first encrypted completion payload. Host activation and physical
+ActivityKit display are separate acceptance checks.
+
 ## Public 0.1.14 — 2026-11-27
 
 Source `c427ef1f3c3cad0b84d6b8ca506eb89808212763` is public as
