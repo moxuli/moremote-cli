@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.1.15 — 2026-11-27
 
 - Keep the conversation name on finished and failed Live Activities when workspace metadata is still unavailable. Recover a missing title from the same verified Paseo completion read used by notifications.
 
