@@ -76,6 +76,10 @@ export function liveObservation(snapshot:LiveSnapshot|null,now=Date.now()){
 /** Durable display publication only. No command execution or remote tracking authority. */
 export class LiveActivityPublisher {
   constructor(private journal: OperationJournal) {}
+  isStopped(pairId:string,registrationId:string){
+    const previous=this.journal.livePublication<Publication>(pairId);
+    return previous?.registrationId===registrationId&&previous.stopped===true;
+  }
   hasUnacknowledged(pairId:string,registrationId:string,now=Date.now()){
     const previous=this.journal.livePublication<Publication>(pairId);
     return previous?.registrationId===registrationId&&!previous.acknowledged&&!previous.stopped

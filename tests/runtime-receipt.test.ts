@@ -22,7 +22,7 @@ const pairId='11111111-1111-4111-8111-111111111111',id='22222222-2222-4222-8222-
 async function until(predicate:()=>boolean|Promise<boolean>,message:string,ms=12000){const end=performance.now()+ms;while(performance.now()<end){if(await predicate())return;await sleep(30)}throw Error(message)}
 async function bounded<T>(promise:Promise<T>,ms:number,message:string){const deadline=Promise.withResolvers<never>();const timer=setTimeout(()=>deadline.reject(Error(message)),ms);timer.unref();try{return await Promise.race([promise,deadline.promise])}finally{clearTimeout(timer)}}
 async function body(req:IncomingMessage){let value='';for await(const chunk of req)value+=chunk;return value?JSON.parse(value):null}
-async function fixture(options:{locallyRetired?:boolean;withActivity?:boolean;rotateOnTerminal?:boolean;loseRunning?:boolean;pending?:boolean;receiptFailure?:boolean;receiptLosses?:number;stateLosses?:number;retired?:boolean;missing?:boolean;transient?:boolean;stallSnapshot?:boolean;snapshotDelayMs?:number;seedReceipt?:boolean;pause?:{path:'live-activity'|'state'|'receipt';status:429|503;seconds:number}}={}){
+async function fixture(options:{locallyRetired?:boolean;withActivity?:boolean;rotateOnTerminal?:boolean;rejectAlertDuringRotation?:boolean;loseRunning?:boolean;pending?:boolean;receiptFailure?:boolean;receiptLosses?:number;stateLosses?:number;retired?:boolean;missing?:boolean;transient?:boolean;stallSnapshot?:boolean;snapshotDelayMs?:number;seedReceipt?:boolean;pause?:{path:'live-activity'|'state'|'receipt';status:429|503;seconds:number}}={}){
  // A short private fixture root avoids Darwin's sockaddr_un limit even when TMPDIR is long.
  // Production socket placement/ownership checks remain unchanged.
  const root=await mkdtemp(join(process.platform==='win32'?tmpdir():'/tmp','mrr-')),dir=join(root,'c');
@@ -40,7 +40,6 @@ async function fixture(options:{locallyRetired?:boolean;withActivity?:boolean;ro
   if(options.pause&&!pauseAt&&path.endsWith('/'+options.pause.path)){pauseAt=performance.now();res.setHeader('Retry-After',String(options.pause.seconds));return fail('cost_guard_closed',options.pause.status)}
   if(options.withActivity){res.setHeader('x-moremote-live-activity','2');res.setHeader('x-moremote-notification-preview','1')}
   if(path.endsWith('/events')){
-   counts.attention+=value.attention.length;
    const candidates:string[]=value.activity?.candidates.map((candidate:{phase:string})=>candidate.phase)??[];
    if(candidates.includes('running')){
     runningBodies.push(value.activity);
@@ -48,8 +47,10 @@ async function fixture(options:{locallyRetired?:boolean;withActivity?:boolean;ro
    }
    const rotate=options.rotateOnTerminal&&!rotated&&candidates.includes('finished');
    if(rotate)rotated=true;
+   const acceptAttention=!rotate||!options.rejectAlertDuringRotation;
+   if(acceptAttention)counts.attention+=value.attention.length;
    if(value.activity){counts.updates++;if(!rotate)phases.push(...candidates)}
-   return res.end(JSON.stringify({ok:true,attention:value.attention.map((notice:{id:string})=>({id:notice.id,accepted:true})),
+   return res.end(JSON.stringify({ok:true,attention:value.attention.map((notice:{id:string})=>({id:notice.id,accepted:acceptAttention})),
     ...(value.activity?{activity:rotate?{accepted:false,code:'live_activity_generation_changed'}:{accepted:true}}:{})}));
   }
   if(path.endsWith('/live-activity')){
@@ -83,12 +84,20 @@ async function fixture(options:{locallyRetired?:boolean;withActivity?:boolean;ro
   if(options.seedReceipt){const receipt=await sealEnvelope(Buffer.alloc(32,7),{version:1,pairId,id,channel:'receipt',issuedAt:now,expiresAt:now+600000},{operationId:id,state:'accepted',revision:1});journal.outcome(pairId,id,'accepted',receipt)}
   const attentionId='33333333-3333-4333-8333-333333333333';const envelope=await sealEnvelope(Buffer.alloc(32,7),{version:1,pairId,id:attentionId,channel:'attention',issuedAt:now,expiresAt:now+600000},{agentId:'finished-agent',kind:'finished',timestamp:now});journal.queueAttention(pairId,attentionId,envelope.expiresAt,{id:attentionId,kind:'finished',topic:'synthetic',envelope},{agentId:'finished-agent'});
  }finally{journal.close()}
+ const queueCompletion=async()=>{
+  const id='88888888-8888-4888-8888-888888888888',now=Date.now();
+  const envelope=await sealEnvelope(Buffer.alloc(32,7),{version:1,pairId,id,channel:'attention',issuedAt:now,expiresAt:now+600000},
+   {agentId:'another-conversation',kind:'finished',timestamp:now});
+  const journal=new OperationJournal(join(dir,'journal.sqlite'));
+  try{journal.queueAttention(pairId,id,envelope.expiresAt,{id,kind:'finished',topic:'synthetic',envelope},{agentId:'another-conversation'})}
+  finally{journal.close()}
+ };
  const stop=async()=>{
   if(child&&child.exitCode===null&&child.signalCode===null){await bounded(requestControl(dir,'stop'),2200,'STOP_REQUEST_TIMEOUT').catch(()=>{});try{await bounded(exited!,2200,'RUNTIME_STOP_TIMEOUT')}catch{child.kill('SIGKILL');await bounded(exited!,2200,'RUNTIME_KILL_TIMEOUT')}}
  };
  const close=async()=>{try{await stop()}finally{for(const socket of daemon.clients)socket.terminate();relay.closeAllConnections();const daemonClosed=Promise.withResolvers<void>(),relayClosed=Promise.withResolvers<void>();daemon.close(()=>daemonClosed.resolve());relay.close(()=>relayClosed.resolve());try{await bounded(Promise.all([daemonClosed.promise,relayClosed.promise]),2200,'FIXTURE_SERVER_CLOSE_TIMEOUT')}finally{await rm(root,{recursive:true,force:true})}}};
  const start=()=>{assert.ok(Buffer.byteLength(controlEndpoint(dir))<100||process.platform==='win32');child=spawn(process.execPath,['--import','tsx','--input-type=module','--eval',"import {runRuntime} from './src/runtime.ts';let offset=0;const now=Date.now;Date.now=()=>now()+offset;process.on('message',m=>{if(m.type==='advance')offset+=m.ms});await runRuntime(process.argv[1]);process.disconnect();",dir],{cwd:fileURLToPath(new URL('..',import.meta.url)),stdio:['ignore','ignore','inherit','ipc']});exited=once(child,'exit');};
- return {root,dir,counts,states,requests,phases,runningBodies,transition,pausedAt:()=>pauseAt,now,start,stop,close,drain:()=>child!.send({kind:'moremote-drain'}),advance:(ms:number)=>child!.send({type:'advance',ms}),alive:()=>!!child&&child.exitCode===null&&child.signalCode===null};
+ return {root,dir,counts,states,requests,phases,runningBodies,transition,queueCompletion,pausedAt:()=>pauseAt,now,start,stop,close,drain:()=>child!.send({kind:'moremote-drain'}),advance:(ms:number)=>child!.send({type:'advance',ms}),alive:()=>!!child&&child.exitCode===null&&child.signalCode===null};
 }
 
 test('actual runtime keeps notifications alive despite retained receipt and state publication failures',{timeout:20000},async()=>{
@@ -225,5 +234,18 @@ test('a terminal receipt is recovered for a dispatch interrupted before local re
   assert.equal(f.counts.pair,0);assert.equal(f.counts.mutations,0);
   const receipt=f.requests.find(request=>request.path.endsWith('/receipt'));
   assert.equal((receipt?.body as {state:string})?.state,'unknown');
+ }finally{await f.close()}
+});
+
+test('an independent alert rejection cannot hide a registration rotation in the terminal batch',{timeout:24000},async()=>{
+ const f=await fixture({withActivity:true,rotateOnTerminal:true,rejectAlertDuringRotation:true,pending:false,seedReceipt:true});
+ try{
+  f.start();await until(()=>f.counts.attention===1,'INITIAL_NOTIFICATION_MISSING');
+  f.transition('running');await until(()=>f.phases.includes('running'),'RUNNING_ACTIVITY_NOT_SENT');
+  const before=f.counts.live;
+  await f.queueCompletion();
+  f.transition('idle');await until(()=>f.phases.includes('finished')&&f.counts.attention===2,'MIXED_ACK_LOST_TERMINAL_UPDATE');
+  assert.equal(f.counts.live,before+2);
+  assert.equal(f.counts.controls,0);assert.equal(f.counts.commands,0);
  }finally{await f.close()}
 });

@@ -199,7 +199,11 @@ export async function runRuntime(dir:string,version?:string){
    // Run the current observation again after the durable retry is acknowledged.
    if(!recovering||registrationChanged)display.sent=observation?.key;
   }
- }catch(error){failure=error;if(await observeRelayRetirement(config,dir,pair,cloud,error))continue;}
+ }catch(error){
+  // A rejected alert must not hide an independently retired activity result.
+  if(update&&display&&interest&&livePublisher.isStopped(pair.pairId,interest.registrationId))display.key=undefined;
+  failure=error;if(await observeRelayRetirement(config,dir,pair,cloud,error))continue;
+ }
  }catch(error){failure=error;if(!await observeRelayRetirement(config,dir,pair,cloud,error)&&!retryPaused(error))acquisitionFailed=true}}
  try{await enrollment.cleanup(config)}catch(error){failure=error}
  if(failure){lastError=failure instanceof CloudError?failure.code:'CLI_CYCLE_FAILED';stage='degraded';backoff=acquisitionFailed?Math.min(backoff*2,LIMITS.maxBackoffMs):LIMITS.pollMs}else{lastError=null;backoff=LIMITS.pollMs}

@@ -64,9 +64,10 @@ export class CloudClient{
     &&Number.isSafeInteger(reset)&&reset>Date.now()&&Math.abs(reset-retryAt)<=1000;
   const pairBudget=response.headers.get('x-moremote-pair-budget');
   if(response.status===429&&exactReset&&error.code==='pair_daily_work_limit'
-    &&response.headers.get('x-moremote-limit-scope')==='pair'&&['normal','recovery'].includes(pairBudget??'')){
+    &&response.headers.get('x-moremote-limit-scope')==='pair'&&['normal','recovery','enrollment'].includes(pairBudget??'')){
    const failure=new CloudError('PAIR_DAILY_WORK_LIMIT',429,reset,pairBudget==='normal'?'normal':'origin');
-   this.pairRetry[pairBudget==='normal'?'normalError':'error']=failure;
+   if(pairBudget!=='recovery')this.pairRetry.normalError=failure;
+   if(pairBudget!=='normal')this.pairRetry.error=failure;
    throw failure;
   }
   const normalOnly=response.status===429&&exactReset&&error.code==='daily_work_limit'&&response.headers.get('x-moremote-budget')==='normal';
