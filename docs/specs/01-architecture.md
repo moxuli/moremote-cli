@@ -83,9 +83,9 @@ commands, controls, or Live Activities. It observes the local Paseo directory
 and sends changes in the projected display state. An active activity can also
 renew its bounded freshness. Registration is resolved only when there is
 notification or activity delivery work. New notifications open the conversation
-in the phone app. Only legacy hosts take commands from the old queues. The
-companion retains read-only reconciliation and immutable receipts for work
-previously attempted.
+in the phone app. The managed relay rejects retired command/control queue
+list reads. The companion retains read-only reconciliation and immutable
+receipts for work previously attempted. See the [delivery decision](../decisions/0002-event-driven-delivery.md).
 
 ## Action semantics for legacy deliveries
 
@@ -136,7 +136,7 @@ No activity interests, WidgetKit registrations or dedicated surface APNs calls
 remain. Notification control, explicit reply/approval execution, immutable action
 journals and outcome reconciliation retain their original safeguards.
 
-## Optional activity title provenance — unreleased November 15
+## Optional activity title provenance
 
 An active phone activity separately owns bounded official agent and workspace
 read subscriptions. The phone may authorize an exact agent/workspace title source;

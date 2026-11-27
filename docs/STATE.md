@@ -1,5 +1,9 @@
 # Project state
 
+The [event-driven delivery decision](decisions/0002-event-driven-delivery.md)
+records why idle queue reads were removed, why notification actions open the
+conversation, and why terminal activities can use an already verified title.
+
 ## Public 0.1.15 — 2026-11-27
 
 Source `fd87d1c81b9146708a751bb0389f0cc38f25a33a` is public as

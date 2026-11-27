@@ -106,7 +106,7 @@ before using that legacy manual path.
 Cloudflare supports notifications and optional phone-authorized remote updates
 to an already-started Live Activity. Notification and activity changes share a
 bounded event POST. The companion resolves the registration for delivery work
-and skips empty command and control queries. Notification actions open the
+and makes no idle command or control queue reads. Notification actions open the
 conversation in MoRemote. Replies and approvals in the conversation, widgets,
 and ordinary app/extension reads and sends use official Paseo transport and
 shared device state. No general directory or usage feed is

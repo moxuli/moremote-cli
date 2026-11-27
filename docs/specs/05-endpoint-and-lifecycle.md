@@ -167,7 +167,14 @@ Only selected paseo.pid and local-credential files are read, with bounded I/O an
 
 ## Bounded encrypted state and attention
 
-State plaintext is exactly {version:1,daemonServerId,hostName,measuredAt,tasks:[{agentId,provider,title,status,createdAt,updatedAt,lastUserMessageAt,activeTurnStartedAt,cwd,requiresAttention,attentionReason,pendingRequests:[{requestId,requestBinding,request:<complete original official request JSON>}]}],usage,tasksTruncated}. Provider and creation time are additive unreleased source fields; older snapshots may omit them. Preserve genuine official provider and ISO-8601 createdAt/lastUserMessageAt facts; a missing last-user time stays null, never replaced by assistant-driven updatedAt. Consumers order recents by lastUserMessageAt, then creation time only when absent, then stable identity for ties. At most100 recent noninternal/nonarchived tasks,10 requests/task,16 provider summaries and8 windows/balances/provider. A raw request over8KiB is omitted from enhanced actions, not silently truncated into another authority. Whole trailing tasks are omitted to keep serialized state under60000bytes; tasksTruncated is explicit. Unavailable usage is null/unavailable, never zero. No full conversation or files are projected. Measurement time survives immutable state retries.
+The companion's encrypted notification state contains `version`,
+`daemonServerId`, and `tasks`. Each task has `agentId` and current
+`pendingRequests`. Each request contains `requestId`, `requestBinding`, and
+the original official request. The projection omits empty tasks and rejects
+oversize forms. Identical state only needs another upload to renew an expiring
+nonempty snapshot or retry exact bytes after an uncertain result. Normal
+directory and usage reads use Paseo. See the
+[delivery decision](../decisions/0002-event-driven-delivery.md).
 
 Attention plaintext is exactly {agentId,requestId?,requestBinding?,kind,timestamp}. No form or prompt is in the push route. For question/approval actions the app must find the exact matching authenticated raw request and binding in state or open the original form; it cannot paste the same reply into unsupported/multiple questions. Own notification policy uses genuine short viewing leases, never official shouldNotify. Stable semantic attention identity is independent of reconnect-generated authority tokens: reconnect may retire an old action binding without replaying historical attention as a new push. Source change/resolution/current no-longer-requires-attention facts persist exact event invalidation and POST its resolve endpoint, stopping future relay retries without changing official read state. An already in-flight/displayed push cannot be retracted.
 
@@ -177,7 +184,12 @@ The journal retains a canonical full-source fingerprint and random occurrence id
 
 Real upstream kinds are tool|plan|question|mode|other. Enhanced allow/deny requires an actually advertised action with matching behavior. Question codec copies every original input field and adds answers keyed by original question header. It validates choices, ordered multi-choice, allowOther/allowEmpty, completeness and exact preserved noneditable fields. Other edits may change only original string-valued inputs. Remembered grants must match actual current suggestions explicitly chosen by the user. Unknown fields/kinds of operation or an arbitrary new grant are rejected. Expired/stale notifications still navigate read-only, never acquire replacement authority.
 
-## Dispatch, controls and receipts
+## Historical dispatch, controls and receipts
+
+The legacy active dispatch path describes the original wire contract. Current
+companions retain exact operation recovery and receipts for previously attempted
+work. New in-app messages and approvals use Paseo, and notification actions
+open the originating conversation.
 
 Every mutation goes through a FULL-sync SQLite journal, immutable identity/digest and first-only cloud dispatch claim. The local dispatched commit precedes the cloud transition. Lost transition responses or crashes never authorize replay, even with a stable messageId. Actual current request/source/binding and command expiry are rechecked after dispatch, immediately before SDK I/O. SDK automatic reconnect is off; inspected sendAgentMessage/respondToPermissionAndWait use skipQueue:true. Recovery is read-only only.
 

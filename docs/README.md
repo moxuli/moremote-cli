@@ -13,6 +13,7 @@ for the public release and the separate host, device and cloud acceptance record
 - [Managed updates and compatibility](specs/06-managed-updates.md)
 - [Public release operator and receiver verification](releasing.md)
 - [Managed-update decision](decisions/0001-managed-updates.md)
+- [Event-driven delivery and notification actions](decisions/0002-event-driven-delivery.md)
 - [Managed-update implementation plan](plans/2026-11-10-managed-updates.md)
 - [Configuration registry](configuration.md)
 - [Conventions](conventions.md)

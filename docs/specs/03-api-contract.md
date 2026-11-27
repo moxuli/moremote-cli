@@ -285,9 +285,10 @@ Command POST and exact GET return flattened fields
 fields are `Envelope|null`; `digest` is a lowercase SHA256 hex digest of the
 immutable accepted JSON body. Transport `state` is
 `queued|dispatched|cancelled|expired|revoked|accepted|resolved|rejected|unknown`.
-GET commands returns `{ok:true,commands:[<same command fields without ok>],
-hasMore:boolean}`; the first32 available operations are ordered by expiry then
-ID. After processing that page, polling exposes remaining queued operations.
+The historical command list response was `{ok:true,commands:[<same command
+fields without ok>],hasMore:boolean}`, ordered by expiry then ID. The managed
+relay now returns `429 CLI_UPGRADE_REQUIRED` with bounded backoff for the old
+command and control list reads. Exact-ID reads and allowed receipts remain.
 Dispatch adds `dispatchAllowed:boolean` to the exact-command response. Cancel
 adds `outcome:"cancelled"|"too-late"`. Receipt POST takes
 `{state:"accepted"|"resolved"|"rejected"|"unknown",revision,envelope:<receipt>}`
@@ -438,9 +439,9 @@ bounded to8KiB and8hours; the separate local rendering seed never enters cloud.
 For delivery work the authenticated host may GET `/pairs/:id/live-activity`.
 It returns `liveActivity: null` or the unexpired, current
 `{registrationId,interest}`, with `x-moremote-live-activity:2`. The
-phone's APNs token remains on the relay. Legacy controls still include the same
-descriptor during the compatibility window. No recurring empty queue or
-registration reads are made by the current companion.
+phone's APNs token remains on the relay. Earlier compatible relays could also
+return the descriptor with the legacy control list. The current companion
+makes no recurring queue or registration reads while idle.
 
 Host POST `/pairs/:id/events` takes `{attention:[...],activity?:contribution}`.
 This route and its private publish hop alone allow512KiB; other requests remain
