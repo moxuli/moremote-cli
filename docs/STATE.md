@@ -1,5 +1,37 @@
 # Project state
 
+## Public 0.1.14 — 2026-11-27
+
+Source `c427ef1f3c3cad0b84d6b8ca506eb89808212763` is public as
+[`v0.1.14`](https://github.com/moxuli/moremote-cli/releases/tag/v0.1.14).
+The final local check passed 305 tests. The
+[main CI run](https://github.com/moxuli/moremote-cli/actions/runs/45915875209)
+passed on macOS, Ubuntu, and Windows, including packaged upgrade and rollback.
+The [release run](https://github.com/moxuli/moremote-cli/actions/runs/45916816194)
+published a 187,461-byte archive. An anonymous npm and GitHub readback matched
+the local archive and checksum. The isolated installation reported 0.1.14.
+The package SHA256 is
+`a91e87627813d247e215156fcff316a0d63ca41a40692d44f3ac6b74585439f2`.
+The first registry reads returned 404 during propagation. Verification retried
+the same immutable release.
+
+The companion publishes from Paseo observations without periodic command or
+control queue reads. Production switched to the compatible Worker first.
+Authenticated reads verified the active pair and encrypted Live Activity
+registration on both production origins. The first Worker rollout briefly
+returned a private catalog route error while the Durable Object adopted the
+new code. The patched Worker returns a temporary failure in that case. The
+released companion verifies and restores affected local pairings only after
+the relay confirms the exact active pair. Physical notification delivery and
+ActivityKit presentation are separate acceptance checks.
+
+The existing managed macOS supervisor activated 0.1.14 and retained 0.1.13
+for rollback. All three affected pairings returned to active. The running
+companion passed its official read-only Paseo connection check and recorded a
+fresh acknowledged Live Activity publication. A stale workstation npm manifest
+blocked the first update attempt. The same exact update succeeded with a fresh
+registry read.
+
 ## Public 0.1.13 — 2026-11-24
 
 Source `c1e253b2003bbb6ad05b91315446e30fb50d5ea7` is public as
