@@ -22,6 +22,7 @@ import {publishEvents} from './event-publication.js';
 import {encryptNotificationPreview} from './notification-preview.js';
 import {PaseoWatchdog} from './paseo-watchdog.js';
 import {currentDefinition,migrateWindowsLoginRecovery} from './service.js';
+import {recoverCatalogRetirements} from './retired-pair-recovery.js';
 function stableId(value:unknown){const h=createHash('sha256').update(JSON.stringify(value)).digest('hex').slice(0,32);return h.slice(0,8)+'-'+h.slice(8,12)+'-'+h.slice(12,16)+'-'+h.slice(16,20)+'-'+h.slice(20)}
 export async function queueAttention(journal:OperationJournal,pair:Pair,event:Attention&{sourceFingerprint?:string;occurrence?:Occurrence},now=Date.now(),includePreview=true){
  if(event.timestamp+LIMITS.snapshotMs<=now||event.timestamp>now+LIMITS.futureMs)return;
@@ -48,7 +49,7 @@ async function publishResolutions(journal:OperationJournal,pair:Pair,cloud:Cloud
 async function observeRelayRetirement(config:Config,dir:string,pair:Pair,cloud:CloudClient,error:unknown){
  if(pair.relayRetiredAt!==undefined)return true;
  if(!(error instanceof CloudError)||![404,409].includes(error.status))return false;
- let retired=false;try{const state=object((await cloud.pair()).pair).state;retired=state==='revoked'||state==='expired'}catch(probe){if(probe instanceof CloudError&&probe.status===404)retired=true}
+ let retired=false;try{const state=object((await cloud.pair()).pair).state;retired=state==='revoked'||state==='expired'}catch(probe){if(probe instanceof CloudError&&probe.status===404&&probe.relayCode==='pair_not_found')retired=true}
  if(!retired)return false;pair.active=false;pair.relayRetiredAt=Date.now();await saveConfig(dir,config);return true;
 }
 // An elapsed deadline still fences the cycle that observed it.
@@ -69,6 +70,7 @@ export async function runRuntime(dir:string,version?:string){
  if(process.send){process.on('message',parentMessage);process.on('disconnect',parentGone);if(!process.connected)parentGone();else process.send({kind:'moremote-ready'},undefined,undefined,()=>{})}
  const attentionQueue:Attention[]=[];let backoff:number=LIMITS.pollMs;let measuredAt=0;let snapshot:Awaited<ReturnType<OfficialClient['snapshot']>>|undefined;
  const statePublisher=new NotificationStatePublisher();const livePublisher=new LiveActivityPublisher(journal);
+ let checkedCatalogRetirements=false;
  const historicalRecoveryAt=new Map<string,number>();
  const displays=new Map<string,{key:string|undefined;sent:string|undefined;interest:LiveInterest|undefined;previews:boolean;v2:boolean}>();
  const retryStates=new Map<string,CloudRetryState>(),pairRetries=new Map<string,CloudRetryState>();const pollOrigins=new Set<string>();
@@ -123,6 +125,13 @@ export async function runRuntime(dir:string,version?:string){
  for(const id of pairRetries.keys())if(!clouds.has(id))pairRetries.delete(id);
  if(stopped)break;
  if(!official||!official.sdk.isConnected){openingOfficial=true;detach?.();await official?.close().catch(()=>{});stage='connecting';const client=new OfficialClient(config,journal,()=>{displayRevision++;eventWake?.abort()});try{await client.connect();official=client}catch(error){await client.close().catch(()=>{});throw error}openingOfficial=false;watchdog.onConnected();const serverId=official.info()!.serverId;if(!config.daemonServerId){config.daemonServerId=serverId;await saveConfig(dir,config)}detach=official.onAttention(event=>{if(attentionQueue.length<500){attentionQueue.push(event);eventWake?.abort()}else lastError='ATTENTION_QUEUE_LIMIT'});measuredAt=0;}
+ if(!checkedCatalogRetirements&&config.cloudEnabled){
+  const restored=await recoverCatalogRetirements(config,journal,official.info()!.serverId,(origin,pair)=>
+   new CloudClient(origin,pair.pairId,pair.hostToken,false,fetch,runtimeSignal).pair());
+  if(restored)await saveConfig(dir,config);
+  checkedCatalogRetirements=true;
+  if(restored)continue;
+ }
  official.setLiveActivityEnabled(config.cloudEnabled&&config.pairs.some(pair=>pair.active&&!journal.pairRevoked(pair.pairId)&&clouds.has(pair.pairId)),
   [...displays.values()].some(display=>!!display.interest&&display.interest.interest.expiresAt>now));
  try{await enrollment.cycle(config,official.info()!.serverId,pair=>{

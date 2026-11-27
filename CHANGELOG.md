@@ -5,6 +5,7 @@
 - Deliver notifications and encrypted Live Activity updates from local Paseo observations. Idle paired hosts no longer read cloud command or control queues.
 - Look up a Live Activity registration only when there is delivery work. Pair-scoped quota pauses leave other paired devices available.
 - Route notification actions to the conversation on the phone. Preserve receipt reconciliation for operations already attempted by previous versions.
+- Keep active pairings through transient catalog errors and recover affected pairings from the November 27 rollout after a verified relay status read.
 
 ## 0.1.13 — 2026-11-24
 

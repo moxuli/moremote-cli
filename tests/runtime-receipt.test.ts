@@ -22,7 +22,7 @@ const pairId='11111111-1111-4111-8111-111111111111',id='22222222-2222-4222-8222-
 async function until(predicate:()=>boolean|Promise<boolean>,message:string,ms=12000){const end=performance.now()+ms;while(performance.now()<end){if(await predicate())return;await sleep(30)}throw Error(message)}
 async function bounded<T>(promise:Promise<T>,ms:number,message:string){const deadline=Promise.withResolvers<never>();const timer=setTimeout(()=>deadline.reject(Error(message)),ms);timer.unref();try{return await Promise.race([promise,deadline.promise])}finally{clearTimeout(timer)}}
 async function body(req:IncomingMessage){let value='';for await(const chunk of req)value+=chunk;return value?JSON.parse(value):null}
-async function fixture(options:{locallyRetired?:boolean;withActivity?:boolean;rotateOnTerminal?:boolean;rejectAlertDuringRotation?:boolean;loseRunning?:boolean;pending?:boolean;receiptFailure?:boolean;receiptLosses?:number;stateLosses?:number;retired?:boolean;missing?:boolean;transient?:boolean;stallSnapshot?:boolean;snapshotDelayMs?:number;seedReceipt?:boolean;pause?:{path:'live-activity'|'state'|'receipt';status:429|503;seconds:number}}={}){
+async function fixture(options:{locallyRetired?:boolean;withActivity?:boolean;rotateOnTerminal?:boolean;rejectAlertDuringRotation?:boolean;loseRunning?:boolean;pending?:boolean;receiptFailure?:boolean;receiptLosses?:number;stateLosses?:number;retired?:boolean;missing?:boolean;catalogSkew?:boolean;transient?:boolean;stallSnapshot?:boolean;snapshotDelayMs?:number;seedReceipt?:boolean;pause?:{path:'live-activity'|'state'|'receipt';status:429|503;seconds:number}}={}){
  // A short private fixture root avoids Darwin's sockaddr_un limit even when TMPDIR is long.
  // Production socket placement/ownership checks remain unchanged.
  const root=await mkdtemp(join(process.platform==='win32'?tmpdir():'/tmp','mrr-')),dir=join(root,'c');
@@ -63,9 +63,9 @@ async function fixture(options:{locallyRetired?:boolean;withActivity?:boolean;ro
   if(path.endsWith('/controls')){counts.controls++;if(options.missing)return fail('pair_not_found',404);if(options.transient)return fail('temporarily_unavailable',503);return res.end(JSON.stringify({ok:true,controls:[]}))}
   if(path.endsWith('/receipt')){counts.receipts++;if(counts.receipts<=(options.receiptLosses??0)){res.destroy();return}if(options.missing)return fail('pair_not_found',404);if(options.receiptFailure)return fail('receipt_revision_conflict');return res.end(JSON.stringify({ok:true}))}
   if(path.endsWith('/commands')){counts.commands++;if(options.retired)return fail('pair_not_active');return res.end(JSON.stringify({ok:true,commands:[],hasMore:false}))}
-  if(path.endsWith('/state')){states.push(JSON.stringify(value.envelope));if(options.retired)return fail('pair_not_active');if(states.length<=(options.stateLosses||0)){res.destroy();return}return res.end(JSON.stringify({ok:true}))}
+  if(path.endsWith('/state')){states.push(JSON.stringify(value.envelope));if(options.retired)return fail('pair_not_active');if(options.catalogSkew&&states.length===1)return fail('route_not_found',404);if(states.length<=(options.stateLosses||0)){res.destroy();return}return res.end(JSON.stringify({ok:true}))}
   if(path.endsWith('/attention')){counts.attention++;return res.end(JSON.stringify({ok:true}))}
-  counts.pair++;if(options.missing)return fail('pair_not_found',404);res.end(JSON.stringify({ok:true,pair:{state:options.retired?'revoked':'active',pendingClaim:null,activationProof:null}}));
+  counts.pair++;if(options.missing)return fail('pair_not_found',404);if(options.catalogSkew&&counts.pair===1)return fail('route_not_found',404);res.end(JSON.stringify({ok:true,pair:{state:options.retired?'revoked':'active',pendingClaim:null,activationProof:null}}));
  });relay.listen(0,'127.0.0.1');await once(relay,'listening');const relayAddress=relay.address();assert.ok(relayAddress&&typeof relayAddress!=='string');
  daemon.on('connection',socket=>{const reply=(message:unknown)=>socket.send(JSON.stringify(wrapSessionMessage(message)));socket.on('message',data=>{const f=JSON.parse(data.toString());if(f.type==='hello')reply({type:'status',payload:{status:'server_info',serverId:'d',hostname:'Synthetic',features:{explicitEventSubscriptions:true,ownedSubscriptions:true}}});else if(f.type==='ping')socket.send(JSON.stringify({type:'pong'}));else if(f.type==='session'){const m=f.message;if(m.type==='session.events.set_subscription.request')reply({type:'session.events.set_subscription.response',payload:{requestId:m.requestId,subscriptionId:'s'}});else if(m.type==='fetch_workspaces_request')reply({type:'fetch_workspaces_response',payload:{requestId:m.requestId,subscriptionId:'workspaces',entries:[],pageInfo:{nextCursor:null,prevCursor:null,hasMore:false}}});else if(m.type==='fetch_agents_request'){if(!m.subscribe)counts.snapshots++;if(m.subscribe||!options.stallSnapshot)void sleep(options.snapshotDelayMs||0,undefined,{ref:false}).then(()=>{if(socket.readyState===1)reply({type:'fetch_agents_response',payload:{requestId:m.requestId,...(m.subscribe?{subscriptionId:'agents'}:{}),entries:[{agent:syntheticAgent,project:{projectKey:'project',projectName:'Private project',checkout:{cwd:syntheticAgent.cwd,isGit:true,currentBranch:null,remoteUrl:null,isPaseoOwnedWorktree:false}}}],pageInfo:{nextCursor:null,prevCursor:null,hasMore:false}}})})}else if(m.type==='subscription.release.request')reply({type:'subscription.release.response',payload:{requestId:m.requestId}});else if(m.type==='send_agent_message_request'||m.type==='agent_permission_response')counts.mutations++}})});
  let sequence=0;
@@ -131,6 +131,16 @@ for(const missing of [false,true])test(`actual runtime fences ${missing?'missing
   const pair=(await loadConfig(f.dir)).pairs[0];assert.equal(pair.revokedAt,undefined);assert.equal(f.counts.mutations,0);
   const reads=f.requests.length;await sleep(3400);assert.equal(f.requests.length,reads,'retired pairs have no background acquisition');
   const journal=new OperationJournal(join(f.dir,'journal.sqlite'));try{assert.equal(journal.revocationTime(pairId),undefined);assert.equal(journal.controlReceipts(pairId,Date.now()).length,0)}finally{journal.close()}
+ }finally{await f.close()}
+});
+
+test('a missing relay route does not permanently retire an active pair',{timeout:12000},async()=>{
+ const f=await fixture({catalogSkew:true,seedReceipt:true});try{
+  f.start();await until(()=>f.counts.pair===1,'PAIR_STATUS_NOT_CHECKED');
+  await until(()=>f.states.length>=2,'STATE_RETRY_MISSING',6500);
+  const pair=(await loadConfig(f.dir)).pairs[0];
+  assert.equal(pair.active,true);assert.equal(pair.relayRetiredAt,undefined);
+  assert.equal(f.states[0],f.states[1]);assert.equal(f.counts.controls,0);assert.equal(f.counts.commands,0);
  }finally{await f.close()}
 });
 

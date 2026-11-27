@@ -27,6 +27,13 @@ predates the rename; STATE records fresh renamed-tree verification separately.
 
 ## Runtime
 
+A missing relay route does not retire a pairing. A status read must confirm
+revocation, expiry or the catalog's explicit `pair_not_found`. On startup
+version 0.1.14 also checks local retirements from the November 27 rollout
+window on the managed origins. It restores the original pairing only when the
+relay confirms the exact active pair and the local daemon, revocation journal
+and newer enrollment checks permit it.
+
 Use TypeScript on the supported Node 24 line, matching official upstream client
 interfaces and avoiding a second host-protocol implementation where the SDK is
 usable. Pin dependencies and test the explicit upstream compatibility range.
